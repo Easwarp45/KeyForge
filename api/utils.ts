@@ -32,7 +32,6 @@ export const supabase = isLiveMode
     })
   : null;
 
-// ── Ephemeral Fallback Memory (For Local Testing/Out-of-the-box demo) ────────
 export interface MockDataStore {
   projects: any[];
   keys: any[];

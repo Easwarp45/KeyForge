@@ -154,3 +154,4 @@ export interface AuditLog {
 export async function getAudits(): Promise<AuditLog[]> {
   return fetchJson<AuditLog[]>(`${API_BASE}/api/audits`);
 }
+

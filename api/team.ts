@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse, supabase, isLiveMode, mockStore, writeAuditLog, enableCors } from './utils';
+import { VercelRequest, VercelResponse, supabase, isLiveMode, mockStore, writeAuditLog, enableCors } from './utils.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (enableCors(req, res)) return;

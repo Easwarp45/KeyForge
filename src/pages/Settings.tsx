@@ -119,6 +119,7 @@ export default function Settings() {
 
   return (
     <div className="max-w-3xl mx-auto">
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
@@ -211,7 +212,6 @@ export default function Settings() {
             </div>
           </motion.div>
         ))}
-
         {/* Danger zone */}
         <motion.div variants={item} className="bento-card overflow-hidden" style={{ borderColor: 'rgba(255,180,171,0.2)' }}>
           <div className="px-6 py-4 border-b border-error/20 bg-error/5 flex items-center gap-3">
