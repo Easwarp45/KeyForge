@@ -28,20 +28,9 @@ const dataByRange: Record<string, { date: string; calls: number }[]> = {
   ],
 };
 
-const topKeys = [
-  { key: 'PROD_AUTH_MAIN', project: 'Phoenix Project', calls: 1248392, avg: '41.6k' },
-  { key: 'MOBILE_IOS_V2', project: 'CyberVault', calls: 892104, avg: '29.7k' },
-  { key: 'STRIPE_HOOK_01', project: 'Payment GW', calls: 540200, avg: '18.0k' },
-  { key: 'ANALYTICS_READ', project: 'Data Pipeline', calls: 340500, avg: '11.4k' },
-];
+const topKeys: { key: string; project: string; calls: number; avg: string }[] = [];
 
-const endpoints = [
-  { path: '/api/v1/auth/token', pct: 42 },
-  { path: '/api/v1/keys/validate', pct: 28 },
-  { path: '/api/v2/users/me', pct: 15 },
-  { path: '/api/v1/logs/query', pct: 10 },
-  { path: '/api/v1/events', pct: 5 },
-];
+const endpoints: { path: string; pct: number }[] = [];
 
 const heatmapBase = [
   [10, 40, 20, 80, 30, 10, 5],
@@ -108,7 +97,7 @@ export default function Analytics() {
           <Select
             value={selectedProject}
             onChange={setSelectedProject}
-            options={['All Projects', 'Phoenix Engine', 'CyberVault Auth', 'Payment Gateway']}
+            options={['All Projects']}
             className="w-full"
           />
         </div>
@@ -117,7 +106,7 @@ export default function Analytics() {
           <Select
             value={selectedKey}
             onChange={setSelectedKey}
-            options={['All Active Keys', 'PROD_WRITE_01', 'STAGING_READ_02', 'LEGACY_SUPPORT']}
+            options={['All Active Keys']}
             className="w-full"
           />
         </div>
@@ -295,35 +284,42 @@ export default function Analytics() {
             <button onClick={() => navigate('/keys')} className="text-xs text-primary hover:underline cursor-pointer">View all</button>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20">
-                  <th className="pb-2">Key Identity</th>
-                  <th className="pb-2 text-right">Calls</th>
-                  <th className="pb-2 text-center">Trend</th>
-                  <th className="pb-2 text-right">Avg/Day</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs divide-y divide-outline-variant/10">
-                {topKeys.map(k => (
-                  <tr key={k.key} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigate('/keys')}>
-                    <td className="py-3">
-                      <p className="font-bold text-on-surface font-mono">{k.key}</p>
-                      <p className="font-mono text-[10px] text-on-surface-variant">{k.project}</p>
-                    </td>
-                    <td className="py-3 text-right font-mono">{k.calls.toLocaleString()}</td>
-                    <td className="py-3 flex justify-center items-center">
-                      <div className="flex gap-0.5 items-end h-6">
-                        {[2, 3, 5, 4, 6].map((v, i) => (
-                          <div key={i} className="w-1 rounded-sm" style={{ height: `${v * 4}px`, backgroundColor: `rgba(78,222,163,${0.2 + i * 0.2})` }} />
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 text-right text-primary font-bold font-mono">{k.avg}</td>
+            {topKeys.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-10 text-center gap-2">
+                <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 36 }}>bar_chart</span>
+                <p className="text-on-surface-variant text-xs">No key usage data yet.<br />Data will appear once your keys receive traffic.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20">
+                    <th className="pb-2">Key Identity</th>
+                    <th className="pb-2 text-right">Calls</th>
+                    <th className="pb-2 text-center">Trend</th>
+                    <th className="pb-2 text-right">Avg/Day</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="text-xs divide-y divide-outline-variant/10">
+                  {topKeys.map(k => (
+                    <tr key={k.key} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigate('/keys')}>
+                      <td className="py-3">
+                        <p className="font-bold text-on-surface font-mono">{k.key}</p>
+                        <p className="font-mono text-[10px] text-on-surface-variant">{k.project}</p>
+                      </td>
+                      <td className="py-3 text-right font-mono">{k.calls.toLocaleString()}</td>
+                      <td className="py-3 flex justify-center items-center">
+                        <div className="flex gap-0.5 items-end h-6">
+                          {[2, 3, 5, 4, 6].map((v, i) => (
+                            <div key={i} className="w-1 rounded-sm" style={{ height: `${v * 4}px`, backgroundColor: `rgba(78,222,163,${0.2 + i * 0.2})` }} />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 text-right text-primary font-bold font-mono">{k.avg}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </motion.div>
 
@@ -334,7 +330,12 @@ export default function Analytics() {
             <span className="font-mono text-[10px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded">Top 5 Paths</span>
           </div>
           <div className="flex-1 space-y-4 pt-1">
-            {endpoints.map(ep => (
+            {endpoints.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-8 text-center gap-2">
+                <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 36 }}>insights</span>
+                <p className="text-on-surface-variant text-xs">No endpoint data yet.<br />Usage will appear once your APIs receive requests.</p>
+              </div>
+            ) : endpoints.map(ep => (
               <div key={ep.path} className="space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="font-mono text-on-surface-variant">{ep.path}</span>

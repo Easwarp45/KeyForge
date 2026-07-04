@@ -35,10 +35,7 @@ const dataByRange: Record<string, { date: string; calls: number }[]> = {
   ],
 };
 
-const expiryAlerts = [
-  { name: 'prod_eu_gateway', days: '2 days', urgency: 'text-error' },
-  { name: 'dev_stripe_hooks', days: '5 days', urgency: 'text-tertiary' },
-];
+const expiryAlerts: { name: string; days: string; urgency: string }[] = [];
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.3 } } };

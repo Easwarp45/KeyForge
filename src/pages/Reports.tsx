@@ -27,13 +27,7 @@ const allData = {
   ],
 };
 
-const keyReports = [
-  { name: 'Stripe Prod Integration', calls: 2400000, errors: 1200, uptime: '99.95%', status: 'Healthy' },
-  { name: 'Analytics Read-Only', calls: 890000, errors: 450, uptime: '99.87%', status: 'Healthy' },
-  { name: 'Mobile iOS Client', calls: 540000, errors: 3200, uptime: '98.12%', status: 'Warning' },
-  { name: 'Legacy CRM Sync', calls: 120000, errors: 890, uptime: '99.23%', status: 'Healthy' },
-  { name: 'Webhook Receiver', calls: 340000, errors: 560, uptime: '99.67%', status: 'Healthy' },
-];
+const keyReports: { name: string; calls: number; errors: number; uptime: string; status: string }[] = [];
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };

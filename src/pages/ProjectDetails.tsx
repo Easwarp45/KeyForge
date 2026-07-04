@@ -340,10 +340,12 @@ export default function ProjectDetails() {
           <div className="bento-card p-6 flex flex-col gap-4">
             <h3 className="font-semibold text-on-surface text-sm">Assigned Contributors</h3>
             <div className="space-y-3">
-              {(members.length ? members : [
-                { name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM' },
-                { name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR' },
-              ]).map((m, idx) => (
+              {members.length === 0 ? (
+                <div className="flex flex-col items-center py-6 text-center gap-2">
+                  <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 30 }}>group</span>
+                  <p className="text-on-surface-variant text-xs">No contributors yet.<br />Invite team members from the <span className="text-primary cursor-pointer" onClick={() => {}}>Team</span> page.</p>
+                </div>
+              ) : members.map((m, idx) => (
                 <div key={idx} className="flex items-center gap-3 justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">

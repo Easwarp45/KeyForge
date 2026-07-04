@@ -13,14 +13,7 @@ type Alert = {
   read: boolean;
 };
 
-const initialAlerts: Alert[] = [
-  { id: 1, type: 'expiry', title: 'Key Expiring Soon', message: 'prod_eu_gateway expires in 2 days.', keyName: 'prod_eu_gateway', time: '5 min ago', severity: 'critical', read: false },
-  { id: 2, type: 'security', title: 'Anomalous Traffic Detected', message: 'Unusual spike: 8,200 requests/min from IP 192.168.1.0', keyName: 'PROD_AUTH_MAIN', time: '23 min ago', severity: 'critical', read: false },
-  { id: 3, type: 'expiry', title: 'Key Expiring Soon', message: 'dev_stripe_hooks expires in 5 days.', keyName: 'dev_stripe_hooks', time: '1 hour ago', severity: 'warning', read: false },
-  { id: 4, type: 'quota', title: 'Quota Threshold Reached', message: 'API quota at 90% for Payment Gateway project.', keyName: 'Payment Gateway', time: '3 hours ago', severity: 'warning', read: true },
-  { id: 5, type: 'rotation', title: 'Key Rotation Completed', message: 'legacy_crm_sync was successfully rotated.', keyName: 'legacy_crm_sync', time: '6 hours ago', severity: 'info', read: true },
-  { id: 6, type: 'rotation', title: 'Key Rotation Completed', message: 'analytics_read_v2 was generated successfully.', keyName: 'analytics_read_v2', time: '1 day ago', severity: 'info', read: true },
-];
+const initialAlerts: Alert[] = [];
 
 const severityConfig = {
   critical: { icon: 'error', color: 'text-error', bg: 'bg-error/10 border-error/20', dot: '#ffb4ab' },

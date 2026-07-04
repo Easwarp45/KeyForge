@@ -29,9 +29,9 @@ const sections = [
     title: 'Account',
     icon: 'account_circle',
     fields: [
-      { label: 'Display Name', type: 'text', value: 'DevMaster_01', id: 'display-name' },
-      { label: 'Email Address', type: 'email', value: 'devmaster@company.com', id: 'email' },
-      { label: 'Organization', type: 'text', value: 'Acme Corp', id: 'org' },
+      { label: 'Display Name', type: 'text', value: '', id: 'display-name' },
+      { label: 'Email Address', type: 'email', value: '', id: 'email' },
+      { label: 'Organization', type: 'text', value: '', id: 'org' },
     ],
   },
   {

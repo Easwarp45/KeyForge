@@ -43,34 +43,10 @@ export interface MockDataStore {
 const globalRef = globalThis as any;
 if (!globalRef.mockStore) {
   globalRef.mockStore = {
-    projects: [
-      { id: '1', name: 'Payment Gateway', description: 'Handles all payment processing and billing APIs.', keys: 3, calls: '2.4M', status: 'Healthy', updated: '2 hours ago', icon: 'payments', color: '#10b981' },
-      { id: '2', name: 'User Auth Service', description: 'Authentication and session management APIs.', keys: 2, calls: '890K', status: 'Healthy', updated: '5 hours ago', icon: 'lock', color: '#d0bcff' },
-      { id: '3', name: 'Data Pipeline', description: 'ETL and data transformation services.', keys: 1, calls: '340K', status: 'Warning', updated: '1 day ago', icon: 'storage', color: '#ffb3af' },
-      { id: '4', name: 'Phoenix Engine', description: 'Core API orchestration and routing layer.', keys: 2, calls: '5.1M', status: 'Healthy', updated: '30 min ago', icon: 'hub', color: '#10b981' },
-    ],
-    keys: [
-      { id: 101, name: 'Stripe Prod Key', key: 'sk_live_stripe_982b', project_id: '1', scope: 'Admin', expiry: 'Never', status: 'Active' },
-      { id: 102, name: 'PayPal API Integration', key: 'sk_live_paypal_102f', project_id: '1', scope: 'Read/Write', expiry: '30 Days', status: 'Active' },
-      { id: 103, name: 'Legacy ApplePay Hook', key: 'sk_live_apple_774d', project_id: '1', scope: 'Read', expiry: 'Never', status: 'Disabled' },
-      { id: 201, name: 'Cognito Client Sync', key: 'sk_live_auth_cc91', project_id: '2', scope: 'Read/Write', expiry: 'Never', status: 'Active' },
-      { id: 202, name: 'Auth0 Auth Hook', key: 'sk_live_auth_0a23', project_id: '2', scope: 'Admin', expiry: '90 Days', status: 'Active' },
-      { id: 301, name: 'ETL Pipeline Key', key: 'sk_live_etl_4421', project_id: '3', scope: 'Read/Write', expiry: '3 Days', status: 'Active' },
-    ],
-    team: [
-      { id: 1, name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM', joined: 'Jan 2024', status: 'Active', keys: 22 },
-      { id: 2, name: 'Alex Chen', email: 'alex.chen@company.com', role: 'Admin', avatar: 'AC', joined: 'Feb 2024', status: 'Active', keys: 14 },
-      { id: 3, name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR', joined: 'Mar 2024', status: 'Active', keys: 8 },
-      { id: 4, name: 'Taylor Kim', email: 'taylor.k@company.com', role: 'Read Only', avatar: 'TK', joined: 'Apr 2024', status: 'Active', keys: 0 },
-      { id: 5, name: 'Morgan Davis', email: 'mdavis@company.com', role: 'Developer', avatar: 'MD', joined: 'May 2024', status: 'Invited', keys: 0 },
-    ],
-    audits: [
-      { id: 1, action: 'Key Rotated', category: 'Key Operations', actorName: 'Alex Chen', actorEmail: 'alex.chen@company.com', target: 'sk_live_stripe_982b', ip: '192.168.1.42', location: 'US-East (N. Virginia)', timestamp: '2026-07-04 14:15:22 UTC', severity: 'Success' },
-      { id: 2, action: 'Key Revoked', category: 'Key Operations', actorName: 'Jordan Martinez', actorEmail: 'j.martinez@company.com', target: 'sk_live_crm_sync', ip: '85.204.101.99', location: 'EU-Central (Frankfurt)', timestamp: '2026-07-04 12:44:10 UTC', severity: 'Revocation' },
-      { id: 3, action: 'Project Created', category: 'Project Operations', actorName: 'Jordan Martinez', actorEmail: 'j.martinez@company.com', target: 'CyberVault Auth', ip: '85.204.101.99', location: 'EU-Central (Frankfurt)', timestamp: '2026-07-04 10:12:15 UTC', severity: 'Success' },
-      { id: 4, action: 'Member Invited', category: 'Team Access', actorName: 'Jordan Martinez', actorEmail: 'j.martinez@company.com', target: 'morgan.davis@company.com', ip: '85.204.101.99', location: 'EU-Central (Frankfurt)', timestamp: '2026-07-04 09:30:00 UTC', severity: 'Success' },
-      { id: 5, action: 'MFA Enabled', category: 'System Settings', actorName: 'Sam Rivera', actorEmail: 'sam.r@company.com', target: 'Account Security Settings', ip: '14.192.83.210', location: 'AP-South (Mumbai)', timestamp: '2026-07-03 21:05:40 UTC', severity: 'Success' },
-    ]
+    projects: [],
+    keys: [],
+    team: [],
+    audits: []
   };
 }
 

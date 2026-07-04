@@ -15,8 +15,11 @@ export default function AuthCallback() {
       return;
     }
 
+    // Capture non-null reference so TypeScript is happy inside callbacks
+    const client = supabaseClient;
+
     // Listen for the session to be set from the OAuth hash
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         subscription.unsubscribe();
         navigate('/dashboard', { replace: true });
@@ -27,7 +30,7 @@ export default function AuthCallback() {
 
     // Safety fallback: if no auth event fires within 5s, re-check session
     const timer = setTimeout(async () => {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const { data: { session } } = await client.auth.getSession();
       if (session) {
         navigate('/dashboard', { replace: true });
       } else {
