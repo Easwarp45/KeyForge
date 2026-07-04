@@ -1,25 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Select from '../components/Select';
-
-type Member = {
-  id: number;
-  name: string;
-  email: string;
-  role: 'Owner' | 'Admin' | 'Developer' | 'Read Only';
-  avatar: string;
-  joined: string;
-  status: 'Active' | 'Invited';
-  keys: number;
-};
-
-const initialMembers: Member[] = [
-  { id: 1, name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM', joined: 'Jan 2024', status: 'Active', keys: 22 },
-  { id: 2, name: 'Alex Chen', email: 'alex.chen@company.com', role: 'Admin', avatar: 'AC', joined: 'Feb 2024', status: 'Active', keys: 14 },
-  { id: 3, name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR', joined: 'Mar 2024', status: 'Active', keys: 8 },
-  { id: 4, name: 'Taylor Kim', email: 'taylor.k@company.com', role: 'Read Only', avatar: 'TK', joined: 'Apr 2024', status: 'Active', keys: 0 },
-  { id: 5, name: 'Morgan Davis', email: 'mdavis@company.com', role: 'Developer', avatar: 'MD', joined: 'May 2024', status: 'Invited', keys: 0 },
-];
+import { getTeam, inviteMember, updateMember, removeMember, type TeamMember } from '../api';
 
 const roleColors: Record<string, string> = {
   Owner: 'text-error bg-error/10 border-error/20',
@@ -34,7 +16,8 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } 
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.25 } } };
 
 export default function Team() {
-  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Developer' | 'Admin' | 'Read Only'>('Developer');
@@ -42,38 +25,40 @@ export default function Team() {
   const [filter, setFilter] = useState<'All' | 'Admin' | 'Developer' | 'Invited'>('All');
 
   // Edit states
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editRole, setEditRole] = useState<'Owner' | 'Admin' | 'Developer' | 'Read Only'>('Developer');
   const [editName, setEditName] = useState('');
+
+  useEffect(() => {
+    getTeam()
+      .then(setMembers)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !name.trim()) return;
 
-    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-
-    const newMember: Member = {
-      id: Date.now(),
-      name: name,
-      email: email,
-      role: role,
-      avatar: initials,
-      joined: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      status: 'Invited',
-      keys: 0
-    };
-
-    setMembers(prev => [...prev, newMember]);
-    setShowInvite(false);
-    setEmail('');
-    setName('');
+    inviteMember(name, email, role)
+      .then(newMember => {
+        setMembers(prev => [...prev, newMember]);
+        setShowInvite(false);
+        setEmail('');
+        setName('');
+      })
+      .catch(console.error);
   };
 
-  const handleDelete = (id: number) => {
-    setMembers(prev => prev.filter(m => m.id !== id));
+  const handleDelete = (idVal: string | number) => {
+    removeMember(idVal)
+      .then(() => {
+        setMembers(prev => prev.filter(m => m.id !== idVal));
+      })
+      .catch(console.error);
   };
 
-  const handleEditClick = (member: Member) => {
+  const handleEditClick = (member: TeamMember) => {
     setEditingMember(member);
     setEditRole(member.role);
     setEditName(member.name);
@@ -83,12 +68,12 @@ export default function Team() {
     e.preventDefault();
     if (!editingMember || !editName.trim()) return;
 
-    setMembers(prev => prev.map(m =>
-      m.id === editingMember.id
-        ? { ...m, name: editName, role: editRole }
-        : m
-    ));
-    setEditingMember(null);
+    updateMember(editingMember.id, { name: editName, role: editRole })
+      .then(updated => {
+        setMembers(prev => prev.map(m => m.id === editingMember.id ? { ...m, name: updated.name, role: updated.role } : m));
+        setEditingMember(null);
+      })
+      .catch(console.error);
   };
 
   const filteredMembers = members.filter(m => {
@@ -144,7 +129,16 @@ export default function Team() {
       {/* Members list */}
       <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-3">
         <AnimatePresence mode="popLayout">
-          {filteredMembers.map((m, i) => (
+          {loading ? (
+            <div className="py-12 text-center text-on-surface-variant font-mono text-sm">
+              <span className="material-symbols-outlined animate-spin align-middle mr-2" style={{ fontSize: 20 }}>progress_activity</span>
+              Loading team directory...
+            </div>
+          ) : filteredMembers.length === 0 ? (
+            <div className="py-12 text-center text-on-surface-variant font-mono text-sm">
+              No team members found matching your filters.
+            </div>
+          ) : filteredMembers.map((m, i) => (
             <motion.div
               key={m.id}
               variants={item}

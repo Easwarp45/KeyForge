@@ -2,26 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Select from '../components/Select';
-
-type Key = {
-  id: number;
-  name: string;
-  created: string;
-  key: string;
-  project: string;
-  scope: string;
-  expiry: string;
-  status: 'Active' | 'Revoked' | 'Disabled';
-  expiryWarning?: boolean;
-};
-
-const initialKeys: Key[] = [
-  { id: 1, name: 'Stripe Prod Integration', created: 'Oct 12, 2023', key: 'sk_live_3f2a9b1c', project: 'Payment Gateway', scope: 'Admin', expiry: 'Never', status: 'Active' },
-  { id: 2, name: 'Analytics Read-Only', created: 'Jan 05, 2024', key: 'sk_live_9a1bd4e2', project: 'Data Pipeline', scope: 'Read', expiry: '3 days', status: 'Active', expiryWarning: true },
-  { id: 3, name: 'Mobile iOS Client', created: 'Mar 22, 2024', key: 'sk_live_7d4cf8a0', project: 'User Auth Service', scope: 'Read/Write', expiry: 'Jun 30, 2024', status: 'Active' },
-  { id: 4, name: 'Legacy CRM Sync', created: 'Sep 01, 2022', key: 'sk_live_2b9e45dc', project: 'Payment Gateway', scope: 'Admin', expiry: 'Never', status: 'Revoked' },
-  { id: 5, name: 'Webhook Receiver', created: 'Dec 10, 2023', key: 'sk_live_f1a388bc', project: 'User Auth Service', scope: 'Write', expiry: 'Aug 15, 2024', status: 'Active' },
-];
+import { getProjects, getKeys, generateKey, rotateKey, updateKeyStatus, revokeKey, type ApiKey, type Project } from '../api';
 
 const scopeColor: Record<string, string> = {
   Admin: 'bg-error/10 text-error border-error/20',
@@ -35,17 +16,37 @@ const MASK = '••••••••••••••••';
 export default function KeyManager() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [keys, setKeys] = useState<Key[]>(initialKeys);
+  
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [showModal, setShowModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'Active' | 'All'>('Active');
   const [filterProject, setFilterProject] = useState('All Projects');
   const [filterScope, setFilterScope] = useState('Any Scope');
-  const [revealedKeys, setRevealedKeys] = useState<Set<number>>(new Set());
-  const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [rotatingId, setRotatingId] = useState<number | null>(null);
+  const [revealedKeys, setRevealedKeys] = useState<Set<string | number>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | number | null>(null);
+  const [rotatingId, setRotatingId] = useState<string | number | null>(null);
+  
+  const [newKeyDetails, setNewKeyDetails] = useState<ApiKey | null>(null);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [showSearch, setShowSearch] = useState(!!searchParams.get('search'));
-  const [newKey, setNewKey] = useState({ name: '', project: 'Payment Gateway', scope: 'Read/Write', expiry: '30 Days' });
+  
+  const [newKey, setNewKey] = useState({ name: '', projectId: '', scope: 'Read/Write', expiry: '30 Days' });
+
+  useEffect(() => {
+    Promise.all([getProjects(), getKeys()])
+      .then(([projData, keyData]) => {
+        setProjects(projData);
+        setKeys(keyData);
+        if (projData.length > 0) {
+          setNewKey(p => ({ ...p, projectId: projData[0].id }));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     const q = searchParams.get('search') || '';
@@ -54,56 +55,82 @@ export default function KeyManager() {
   }, [searchParams]);
 
   /* ── Actions ─────────────────────────────────────────── */
-  const toggleReveal = (id: number) =>
-    setRevealedKeys(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleReveal = (idVal: string | number) =>
+    setRevealedKeys(prev => { const n = new Set(prev); n.has(idVal) ? n.delete(idVal) : n.add(idVal); return n; });
 
-  const handleCopy = (id: number, keyVal: string) => {
+  const handleCopy = (idVal: string | number, keyVal: string) => {
     navigator.clipboard.writeText(keyVal).catch(() => {});
-    setCopiedId(id);
+    setCopiedId(idVal);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDelete = (id: number) => setKeys(prev => prev.filter(k => k.id !== id));
+  const handleDelete = (idVal: string | number) => {
+    revokeKey(idVal)
+      .then(() => setKeys(prev => prev.filter(k => k.id !== idVal)))
+      .catch(console.error);
+  };
 
-  const handleDisable = (id: number) =>
-    setKeys(prev => prev.map(k => k.id === id ? { ...k, status: k.status === 'Active' ? 'Disabled' : 'Active' } : k));
+  const handleDisable = (idVal: string | number) => {
+    const targetKey = keys.find(k => k.id === idVal);
+    if (!targetKey) return;
+    const nextStatus = targetKey.status === 'Active' ? 'Disabled' : 'Active';
+    updateKeyStatus(idVal, nextStatus)
+      .then(updated => {
+        setKeys(prev => prev.map(k => k.id === idVal ? { ...k, status: updated.status } : k));
+      })
+      .catch(console.error);
+  };
 
-  const handleRotate = async (id: number) => {
-    setRotatingId(id);
-    await new Promise(r => setTimeout(r, 1200));
-    const newSuffix = Math.random().toString(36).slice(2, 10);
-    setKeys(prev => prev.map(k => k.id === id ? { ...k, key: `sk_live_${newSuffix}` } : k));
-    setRotatingId(null);
+  const handleRotate = (idVal: string | number) => {
+    setRotatingId(idVal);
+    rotateKey(idVal)
+      .then(updated => {
+        setNewKeyDetails(updated);
+        setShowModal(true);
+        setKeys(prev => prev.map(k => k.id === idVal ? { ...k, key: updated.key } : k));
+      })
+      .catch(console.error)
+      .finally(() => setRotatingId(null));
   };
 
   const handleCreate = () => {
-    const id = Date.now();
-    const suffix = Math.random().toString(36).slice(2, 10);
-    setKeys(prev => [{
-      id,
-      name: newKey.name || 'New API Key',
-      created: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      key: `sk_live_${suffix}`,
-      project: newKey.project,
+    if (!newKey.projectId || !newKey.name.trim()) return;
+    generateKey({
+      name: newKey.name,
+      projectId: newKey.projectId,
       scope: newKey.scope,
-      expiry: newKey.expiry === 'Never (Not Recommended)' ? 'Never' : newKey.expiry,
-      status: 'Active',
-    }, ...prev]);
+      expiry: newKey.expiry
+    })
+      .then(createdKey => {
+        setKeys(prev => [createdKey, ...prev]);
+        setNewKeyDetails(createdKey);
+        setNewKey(p => ({ ...p, name: '' }));
+      })
+      .catch(console.error);
+  };
+
+  const handleCloseModal = () => {
     setShowModal(false);
-    setNewKey({ name: '', project: 'Payment Gateway', scope: 'Read/Write', expiry: '30 Days' });
+    setNewKeyDetails(null);
   };
 
   const handleExport = () => {
-    const rows = ['Name,Key,Project,Scope,Expiry,Status', ...keys.map(k => `${k.name},${k.key},${k.project},${k.scope},${k.expiry},${k.status}`)].join('\n');
+    const rows = ['Name,Key,Project,Scope,Expiry,Status', ...keys.map(k => {
+      const pName = projects.find(p => p.id === k.project_id)?.name || 'General';
+      return `${k.name},${k.key},${pName},${k.scope},${k.expiry},${k.status}`;
+    })].join('\n');
     const a = document.createElement('a'); a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(rows)}`; a.download = 'api-keys.csv'; a.click();
   };
 
   /* ── Filtering ────────────────────────────────────────── */
   const displayed = keys
     .filter(k => filterStatus === 'All' || k.status === 'Active')
-    .filter(k => filterProject === 'All Projects' || k.project === filterProject)
+    .filter(k => filterProject === 'All Projects' || k.project_id === filterProject)
     .filter(k => filterScope === 'Any Scope' || k.scope === filterScope)
-    .filter(k => !search || k.name.toLowerCase().includes(search.toLowerCase()) || k.project.toLowerCase().includes(search.toLowerCase()));
+    .filter(k => {
+      const pName = (projects.find(p => p.id === k.project_id)?.name || 'General').toLowerCase();
+      return !search || k.name.toLowerCase().includes(search.toLowerCase()) || pName.includes(search.toLowerCase());
+    });
 
   /* ── Render ───────────────────────────────────────────── */
   return (
@@ -157,7 +184,7 @@ export default function KeyManager() {
             <Select
               value={filterProject}
               onChange={setFilterProject}
-              options={['All Projects', 'Payment Gateway', 'User Auth Service', 'Data Pipeline']}
+              options={['All Projects', ...projects.map(p => ({ value: p.id, label: p.name }))] }
               className="min-w-[170px]"
             />
 
@@ -268,7 +295,9 @@ export default function KeyManager() {
                       </div>
                     </td>
 
-                    <td className="p-4 text-on-surface-variant text-sm">{k.project}</td>
+                    <td className="p-4 text-on-surface-variant text-sm">
+                      {projects.find(p => p.id === k.project_id)?.name || 'General'}
+                    </td>
 
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${scopeColor[k.scope] ?? ''}`}>
@@ -276,10 +305,7 @@ export default function KeyManager() {
                       </span>
                     </td>
 
-                    <td className={`p-4 text-sm ${k.expiryWarning ? 'text-error font-semibold' : 'text-on-surface-variant'}`}>
-                      {k.expiryWarning && (
-                        <span className="material-symbols-outlined mr-1" style={{ fontSize: 14, verticalAlign: 'middle' }}>warning</span>
-                      )}
+                    <td className="p-4 text-sm text-on-surface-variant">
                       {k.expiry}
                     </td>
 
@@ -349,14 +375,21 @@ export default function KeyManager() {
                 ))}
               </AnimatePresence>
 
-              {displayed.length === 0 && (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="p-12 text-center text-on-surface-variant font-mono text-sm">
+                    <span className="material-symbols-outlined animate-spin align-middle mr-2" style={{ fontSize: 20 }}>progress_activity</span>
+                    Loading credentials...
+                  </td>
+                </tr>
+              ) : displayed.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-12 text-center text-on-surface-variant">
                     <span className="material-symbols-outlined block mb-2" style={{ fontSize: 40 }}>search_off</span>
                     No keys match your filters.
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>
@@ -388,7 +421,7 @@ export default function KeyManager() {
             <div
               className="absolute inset-0"
               style={{ background: 'rgba(9,16,12,0.85)', backdropFilter: 'blur(8px)' }}
-              onClick={() => setShowModal(false)}
+              onClick={handleCloseModal}
             />
             <motion.div
               initial={{ x: '100%' }}
@@ -398,111 +431,161 @@ export default function KeyManager() {
               className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-surface border-l border-outline-variant/40 shadow-2xl flex flex-col z-[110]"
             >
               <div className="px-6 py-5 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container/50">
-                <h3 className="font-semibold text-on-surface" style={{ fontSize: 22 }}>Create New Key</h3>
+                <h3 className="font-semibold text-on-surface" style={{ fontSize: 22 }}>
+                  {newKeyDetails ? 'Key Created' : 'Create New Key'}
+                </h3>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCloseModal}
                   className="text-on-surface-variant hover:text-on-surface p-1 rounded cursor-pointer"
                 >
                   <span className="material-symbols-outlined">close</span>
                 </motion.button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                {/* Key Name */}
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Key Name *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Production Billing"
-                    value={newKey.name}
-                    onChange={e => setNewKey(p => ({ ...p, name: e.target.value }))}
-                    className="glass-input w-full px-3 py-2.5 text-sm"
-                    autoFocus
-                  />
-                  <p className="text-xs text-on-surface-variant mt-1.5">A descriptive name to identify this key.</p>
-                </div>
+              {newKeyDetails ? (
+                <div className="flex-grow overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary text-2xl animate-pulse">lock_open</span>
+                      <p className="text-xs text-on-surface">
+                        <strong>Copy this secret key.</strong> For security, we cannot show this token again after you close this panel.
+                      </p>
+                    </div>
 
-                {/* Project */}
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Project</label>
-                  <Select
-                    value={newKey.project}
-                    onChange={val => setNewKey(p => ({ ...p, project: val }))}
-                    options={['Payment Gateway', 'User Auth Service', 'Data Pipeline', 'Phoenix Engine']}
-                    className="w-full"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <label className="block font-mono text-xs text-on-surface-variant uppercase tracking-wider">Key Label</label>
+                      <p className="font-bold text-sm text-on-surface">{newKeyDetails.name}</p>
+                    </div>
 
-                {/* Scope */}
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-3 uppercase tracking-wider">Permissions Scope</label>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'Read', label: 'Read Only', desc: 'Can only retrieve data, no modifications.' },
-                      { value: 'Read/Write', label: 'Read / Write', desc: 'Standard access for most integrations.' },
-                      { value: 'Write', label: 'Write Only', desc: 'Can write data but not retrieve.' },
-                      { value: 'Admin', label: 'Admin Access', desc: 'Full destructive capabilities. Use with caution.', danger: true },
-                    ].map(opt => (
-                      <label
-                        key={opt.value}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:bg-surface-variant/20 ${
-                          newKey.scope === opt.value
-                            ? opt.danger ? 'border-error/50 bg-error/5' : 'border-primary/40 bg-primary/5'
-                            : 'border-outline-variant/30'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="scope"
-                          value={opt.value}
-                          checked={newKey.scope === opt.value}
-                          onChange={() => setNewKey(p => ({ ...p, scope: opt.value }))}
-                          className="accent-emerald-500"
-                        />
-                        <div>
-                          <div className={`font-medium text-sm ${opt.danger ? 'text-error' : newKey.scope === opt.value ? 'text-primary' : 'text-on-surface'}`}>
-                            {opt.label}
-                          </div>
-                          <div className="text-on-surface-variant text-xs mt-0.5">{opt.desc}</div>
-                        </div>
-                      </label>
-                    ))}
+                    <div className="space-y-2">
+                      <label className="block font-mono text-xs text-on-surface-variant uppercase tracking-wider">Private Access Token</label>
+                      <div className="flex gap-2 items-center bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/40">
+                        <code className="font-mono text-xs text-primary select-all break-all flex-1">{newKeyDetails.key}</code>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleCopy('new', newKeyDetails.key)}
+                          className="btn-secondary p-2 rounded-lg cursor-pointer"
+                          title="Copy Key"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            {copiedId === 'new' ? 'check' : 'content_copy'}
+                          </span>
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseModal}
+                      className="w-full btn-primary py-3 rounded-lg font-bold text-sm shadow-emerald-sm cursor-pointer"
+                    >
+                      Done, I've Copied It
+                    </motion.button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                    {/* Key Name */}
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Key Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Production Billing"
+                        value={newKey.name}
+                        onChange={e => setNewKey(p => ({ ...p, name: e.target.value }))}
+                        className="glass-input w-full px-3 py-2.5 text-sm"
+                        autoFocus
+                      />
+                      <p className="text-xs text-on-surface-variant mt-1.5">A descriptive name to identify this key.</p>
+                    </div>
 
-                {/* Expiry */}
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Expiration</label>
-                  <Select
-                    value={newKey.expiry}
-                    onChange={val => setNewKey(p => ({ ...p, expiry: val }))}
-                    options={['30 Days', '60 Days', '90 Days', '1 Year', 'Never (Not Recommended)']}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+                    {/* Project */}
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Project</label>
+                      <Select
+                        value={newKey.projectId}
+                        onChange={val => setNewKey(p => ({ ...p, projectId: val }))}
+                        options={projects.map(p => ({ value: p.id, label: p.name }))}
+                        className="w-full"
+                      />
+                    </div>
 
-              <div className="p-6 border-t border-outline-variant/30 bg-surface-container/30 flex justify-end gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowModal(false)}
-                  className="btn-secondary px-4 py-2 text-sm rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleCreate}
-                  disabled={!newKey.name.trim()}
-                  className="btn-primary px-5 py-2 text-sm shadow-emerald-sm rounded-lg disabled:opacity-50 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>key</span>
-                  Generate Key
-                </motion.button>
-              </div>
+                    {/* Scope */}
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-3 uppercase tracking-wider">Permissions Scope</label>
+                      <div className="space-y-2">
+                        {[
+                          { value: 'Read', label: 'Read Only', desc: 'Can only retrieve data, no modifications.' },
+                          { value: 'Read/Write', label: 'Read / Write', desc: 'Standard access for most integrations.' },
+                          { value: 'Write', label: 'Write Only', desc: 'Can write data but not retrieve.' },
+                          { value: 'Admin', label: 'Admin Access', desc: 'Full destructive capabilities. Use with caution.', danger: true },
+                        ].map(opt => (
+                          <label
+                            key={opt.value}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:bg-surface-variant/20 ${
+                              newKey.scope === opt.value
+                                ? opt.danger ? 'border-error/50 bg-error/5' : 'border-primary/40 bg-primary/5'
+                                : 'border-outline-variant/30'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="scope"
+                              value={opt.value}
+                              checked={newKey.scope === opt.value}
+                              onChange={() => setNewKey(p => ({ ...p, scope: opt.value }))}
+                              className="accent-emerald-500"
+                            />
+                            <div>
+                              <div className={`font-medium text-sm ${opt.danger ? 'text-error' : newKey.scope === opt.value ? 'text-primary' : 'text-on-surface'}`}>
+                                {opt.label}
+                              </div>
+                              <div className="text-on-surface-variant text-xs mt-0.5">{opt.desc}</div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Expiry */}
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Expiration</label>
+                      <Select
+                        value={newKey.expiry}
+                        onChange={val => setNewKey(p => ({ ...p, expiry: val }))}
+                        options={['30 Days', '60 Days', '90 Days', '1 Year', 'Never (Not Recommended)']}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-t border-outline-variant/30 bg-surface-container/30 flex justify-end gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseModal}
+                      className="btn-secondary px-4 py-2 text-sm rounded-lg cursor-pointer"
+                    >
+                      Cancel
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCreate}
+                      disabled={!newKey.name.trim()}
+                      className="btn-primary px-5 py-2 text-sm shadow-emerald-sm rounded-lg disabled:opacity-50 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>key</span>
+                      Generate Key
+                    </motion.button>
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}

@@ -1,191 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Select from '../components/Select';
+import { getProjects, getKeys, generateKey, rotateKey, updateKeyStatus, revokeKey, getTeam, type ApiKey, type Project, type TeamMember } from '../api';
 
-type Key = {
-  id: number;
-  name: string;
-  key: string;
-  scope: string;
-  expiry: string;
-  status: 'Active' | 'Revoked' | 'Disabled';
-};
-
-type ProjectData = {
-  id: number;
-  name: string;
-  description: string;
-  status: 'Healthy' | 'Warning' | 'Inactive';
-  updated: string;
-  icon: string;
-  color: string;
-  keys: Key[];
-  calls: string;
-  callsData: { date: string; calls: number }[];
-  members: { name: string; email: string; role: string; avatar: string }[];
-};
-
-const projectsDataSource: Record<string, ProjectData> = {
-  '1': {
-    id: 1,
-    name: 'Payment Gateway',
-    description: 'Handles all payment processing and billing APIs.',
-    status: 'Healthy',
-    updated: '2 hours ago',
-    icon: 'payments',
-    color: '#10b981',
-    calls: '2.4M',
-    callsData: [
-      { date: 'Jun 22', calls: 35000 },
-      { date: 'Jun 23', calls: 41000 },
-      { date: 'Jun 24', calls: 38000 },
-      { date: 'Jun 25', calls: 44000 },
-      { date: 'Jun 26', calls: 48000 },
-      { date: 'Jun 27', calls: 52000 },
-      { date: 'Jun 28', calls: 49000 },
-    ],
-    keys: [
-      { id: 101, name: 'Stripe Prod Key', key: 'sk_live_stripe_982b', scope: 'Admin', expiry: 'Never', status: 'Active' },
-      { id: 102, name: 'PayPal API Integration', key: 'sk_live_paypal_102f', scope: 'Read/Write', expiry: '30 Days', status: 'Active' },
-      { id: 103, name: 'Legacy ApplePay Hook', key: 'sk_live_apple_774d', scope: 'Read', expiry: 'Never', status: 'Disabled' },
-    ],
-    members: [
-      { name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM' },
-      { name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR' },
-    ],
-  },
-  '2': {
-    id: 2,
-    name: 'User Auth Service',
-    description: 'Authentication and session management APIs.',
-    status: 'Healthy',
-    updated: '5 hours ago',
-    icon: 'lock',
-    color: '#d0bcff',
-    calls: '890K',
-    callsData: [
-      { date: 'Jun 22', calls: 12000 },
-      { date: 'Jun 23', calls: 14000 },
-      { date: 'Jun 24', calls: 11000 },
-      { date: 'Jun 25', calls: 15000 },
-      { date: 'Jun 26', calls: 18000 },
-      { date: 'Jun 27', calls: 17000 },
-      { date: 'Jun 28', calls: 16000 },
-    ],
-    keys: [
-      { id: 201, name: 'Cognito Client Sync', key: 'sk_live_auth_cc91', scope: 'Read/Write', expiry: 'Never', status: 'Active' },
-      { id: 202, name: 'Auth0 Auth Hook', key: 'sk_live_auth_0a23', scope: 'Admin', expiry: '90 Days', status: 'Active' },
-    ],
-    members: [
-      { name: 'Alex Chen', email: 'alex.chen@company.com', role: 'Admin', avatar: 'AC' },
-      { name: 'Taylor Kim', email: 'taylor.k@company.com', role: 'Read Only', avatar: 'TK' },
-    ],
-  },
-  '3': {
-    id: 3,
-    name: 'Data Pipeline',
-    description: 'ETL and data transformation services.',
-    status: 'Warning',
-    updated: '1 day ago',
-    icon: 'storage',
-    color: '#ffb3af',
-    calls: '340K',
-    callsData: [
-      { date: 'Jun 22', calls: 4000 },
-      { date: 'Jun 23', calls: 4500 },
-      { date: 'Jun 24', calls: 6000 },
-      { date: 'Jun 25', calls: 3100 },
-      { date: 'Jun 26', calls: 5000 },
-      { date: 'Jun 27', calls: 5800 },
-      { date: 'Jun 28', calls: 2400 },
-    ],
-    keys: [
-      { id: 301, name: 'ETL Pipeline Key', key: 'sk_live_etl_4421', scope: 'Read/Write', expiry: '3 Days', status: 'Active' },
-    ],
-    members: [
-      { name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM' },
-      { name: 'Morgan Davis', email: 'mdavis@company.com', role: 'Developer', avatar: 'MD' },
-    ],
-  },
-  '4': {
-    id: 4,
-    name: 'Phoenix Engine',
-    description: 'Core API orchestration and routing layer.',
-    status: 'Healthy',
-    updated: '30 min ago',
-    icon: 'hub',
-    color: '#10b981',
-    calls: '5.1M',
-    callsData: [
-      { date: 'Jun 22', calls: 78000 },
-      { date: 'Jun 23', calls: 82000 },
-      { date: 'Jun 24', calls: 89000 },
-      { date: 'Jun 25', calls: 94000 },
-      { date: 'Jun 26', calls: 92000 },
-      { date: 'Jun 27', calls: 99000 },
-      { date: 'Jun 28', calls: 104000 },
-    ],
-    keys: [
-      { id: 401, name: 'Phoenix Central Hook', key: 'sk_live_phx_1120', scope: 'Admin', expiry: 'Never', status: 'Active' },
-      { id: 402, name: 'Staging Engine Key', key: 'sk_stage_phx_3345', scope: 'Read/Write', expiry: '1 Year', status: 'Active' },
-    ],
-    members: [
-      { name: 'Alex Chen', email: 'alex.chen@company.com', role: 'Admin', avatar: 'AC' },
-      { name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR' },
-    ],
-  },
-  '5': {
-    id: 5,
-    name: 'CyberVault Auth',
-    description: 'Enterprise identity and access management.',
-    status: 'Healthy',
-    updated: '1 hour ago',
-    icon: 'shield',
-    color: '#4edea3',
-    calls: '1.2M',
-    callsData: [
-      { date: 'Jun 22', calls: 15000 },
-      { date: 'Jun 23', calls: 19000 },
-      { date: 'Jun 24', calls: 24000 },
-      { date: 'Jun 25', calls: 22000 },
-      { date: 'Jun 26', calls: 25000 },
-      { date: 'Jun 27', calls: 28000 },
-      { date: 'Jun 28', calls: 27000 },
-    ],
-    keys: [
-      { id: 501, name: 'Vault Security Read', key: 'sk_live_sec_0001', scope: 'Read', expiry: 'Never', status: 'Active' },
-    ],
-    members: [
-      { name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM' },
-      { name: 'Taylor Kim', email: 'taylor.k@company.com', role: 'Read Only', avatar: 'TK' },
-    ],
-  },
-  '6': {
-    id: 6,
-    name: 'Nexus Data Hub',
-    description: 'Centralized data lake integration APIs.',
-    status: 'Inactive',
-    updated: '3 days ago',
-    icon: 'cloud',
-    color: '#86948a',
-    calls: '78K',
-    callsData: [
-      { date: 'Jun 22', calls: 1000 },
-      { date: 'Jun 23', calls: 1100 },
-      { date: 'Jun 24', calls: 1200 },
-      { date: 'Jun 25', calls: 900 },
-      { date: 'Jun 26', calls: 1000 },
-      { date: 'Jun 27', calls: 1300 },
-      { date: 'Jun 28', calls: 800 },
-    ],
-    keys: [],
-    members: [
-      { name: 'Morgan Davis', email: 'mdavis@company.com', role: 'Developer', avatar: 'MD' },
-    ],
-  },
-};
+const defaultCallsData = [
+  { date: 'Jun 22', calls: 35000 },
+  { date: 'Jun 23', calls: 41000 },
+  { date: 'Jun 24', calls: 38000 },
+  { date: 'Jun 25', calls: 44000 },
+  { date: 'Jun 26', calls: 48000 },
+  { date: 'Jun 27', calls: 52000 },
+  { date: 'Jun 28', calls: 49000 },
+];
 
 const scopeColor: Record<string, string> = {
   Admin: 'bg-error/10 text-error border-error/20',
@@ -205,51 +33,115 @@ const statusBadge: Record<string, string> = {
 export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const project = projectsDataSource[id || '1'] || projectsDataSource['1'];
 
-  const [keys, setKeys] = useState<Key[]>(project.keys);
-  const [revealedKeys, setRevealedKeys] = useState<Set<number>>(new Set());
-  const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [rotatingId, setRotatingId] = useState<number | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [revealedKeys, setRevealedKeys] = useState<Set<string | number>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | number | null>(null);
+  const [rotatingId, setRotatingId] = useState<string | number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  // Successful key creation visibility helper (Hash-on-Write once)
+  const [newKeyDetails, setNewKeyDetails] = useState<ApiKey | null>(null);
+  
   const [newKey, setNewKey] = useState({ name: '', scope: 'Read/Write', expiry: '30 Days' });
 
-  const toggleReveal = (id: number) =>
-    setRevealedKeys(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      getProjects().then(projs => projs.find(p => p.id === id) || null),
+      getKeys(id),
+      getTeam().catch(() => []) // load members to display in sidebar
+    ])
+      .then(([projData, keyData, teamData]) => {
+        setProject(projData);
+        setKeys(keyData);
+        setMembers(teamData.slice(0, 3));
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  const handleCopy = (id: number, keyVal: string) => {
+  const activeProject = project || {
+    id: id || '',
+    name: 'Loading...',
+    description: '',
+    status: 'Healthy' as const,
+    color: '#10b981',
+    icon: 'folder',
+    calls: '0',
+  };
+
+  const toggleReveal = (idVal: string | number) =>
+    setRevealedKeys(prev => { const n = new Set(prev); n.has(idVal) ? n.delete(idVal) : n.add(idVal); return n; });
+
+  const handleCopy = (idVal: string | number, keyVal: string) => {
     navigator.clipboard.writeText(keyVal).catch(() => {});
-    setCopiedId(id);
+    setCopiedId(idVal);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDelete = (id: number) => setKeys(prev => prev.filter(k => k.id !== id));
+  const handleDelete = (idVal: string | number) => {
+    revokeKey(idVal)
+      .then(() => setKeys(prev => prev.filter(k => k.id !== idVal)))
+      .catch(console.error);
+  };
 
-  const handleDisable = (id: number) =>
-    setKeys(prev => prev.map(k => k.id === id ? { ...k, status: k.status === 'Active' ? 'Disabled' : 'Active' } : k));
+  const handleDisable = (idVal: string | number) => {
+    const targetKey = keys.find(k => k.id === idVal);
+    if (!targetKey) return;
+    const nextStatus = targetKey.status === 'Active' ? 'Disabled' : 'Active';
+    updateKeyStatus(idVal, nextStatus)
+      .then(updated => {
+        setKeys(prev => prev.map(k => k.id === idVal ? { ...k, status: updated.status } : k));
+      })
+      .catch(console.error);
+  };
 
-  const handleRotate = async (id: number) => {
-    setRotatingId(id);
-    await new Promise(r => setTimeout(r, 1200));
-    const newSuffix = Math.random().toString(36).slice(2, 10);
-    setKeys(prev => prev.map(k => k.id === id ? { ...k, key: `sk_live_${newSuffix}` } : k));
-    setRotatingId(null);
+  const handleRotate = (idVal: string | number) => {
+    setRotatingId(idVal);
+    rotateKey(idVal)
+      .then(updated => {
+        setNewKeyDetails(updated); // Show newly generated rotated key in modal exactly once!
+        setShowCreateModal(true); // Re-use modal or open to display plaintext
+        setKeys(prev => prev.map(k => k.id === idVal ? { ...k, key: updated.key } : k));
+      })
+      .catch(console.error)
+      .finally(() => setRotatingId(null));
   };
 
   const handleCreate = () => {
-    const id = Date.now();
-    const suffix = Math.random().toString(36).slice(2, 10);
-    setKeys(prev => [{
-      id,
-      name: newKey.name || 'New API Key',
-      key: `sk_live_${suffix}`,
+    if (!id || !newKey.name.trim()) return;
+    generateKey({
+      name: newKey.name,
+      projectId: id,
       scope: newKey.scope,
-      expiry: newKey.expiry,
-      status: 'Active',
-    }, ...prev]);
-    setShowCreateModal(false);
-    setNewKey({ name: '', scope: 'Read/Write', expiry: '30 Days' });
+      expiry: newKey.expiry
+    })
+      .then(createdKey => {
+        setKeys(prev => [createdKey, ...prev]);
+        setNewKeyDetails(createdKey); // Show generated secret once!
+        setNewKey({ name: '', scope: 'Read/Write', expiry: '30 Days' });
+      })
+      .catch(console.error);
   };
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false);
+    setNewKeyDetails(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] font-mono text-sm text-on-surface-variant py-12">
+        <span className="material-symbols-outlined animate-spin align-middle mr-2" style={{ fontSize: 20 }}>progress_activity</span>
+        Loading project details...
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto flex flex-col gap-6">
@@ -265,31 +157,31 @@ export default function ProjectDetails() {
         </motion.button>
         <span className="text-on-surface-variant text-sm font-mono cursor-pointer hover:underline" onClick={() => navigate('/projects')}>Projects</span>
         <span className="text-on-surface-variant font-mono">/</span>
-        <span className="text-on-surface text-sm font-mono font-semibold">{project.name}</span>
+        <span className="text-on-surface text-sm font-mono font-semibold">{activeProject.name}</span>
       </div>
 
       {/* Header Profile Section */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-6 bento-card gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${project.color}20` }}>
-            <span className="material-symbols-outlined text-3xl" style={{ color: project.color }}>{project.icon}</span>
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${activeProject.color || '#4edea3'}20` }}>
+            <span className="material-symbols-outlined text-3xl" style={{ color: activeProject.color || '#4edea3' }}>{activeProject.icon || 'folder'}</span>
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="font-bold text-on-surface" style={{ fontSize: 26 }}>{project.name}</h2>
-              <span className={statusBadge[project.status]}>
-                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: project.status === 'Healthy' ? '#4edea3' : project.status === 'Warning' ? '#ffb3af' : '#86948a' }} />
-                {project.status}
+              <h2 className="font-bold text-on-surface" style={{ fontSize: 26 }}>{activeProject.name}</h2>
+              <span className={statusBadge[activeProject.status || 'Healthy']}>
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: (activeProject.status || 'Healthy') === 'Healthy' ? '#4edea3' : activeProject.status === 'Warning' ? '#ffb3af' : '#86948a' }} />
+                {activeProject.status || 'Healthy'}
               </span>
             </div>
-            <p className="text-on-surface-variant text-sm mt-1">{project.description}</p>
+            <p className="text-on-surface-variant text-sm mt-1">{activeProject.description || 'No description provided.'}</p>
           </div>
         </div>
         <div className="flex gap-3">
           <motion.button
             whileHover={{ scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/analytics?project=${encodeURIComponent(project.name)}`)}
+            onClick={() => navigate(`/analytics?project=${encodeURIComponent(activeProject.name)}`)}
             className="btn-secondary px-4 py-2 text-sm rounded-lg cursor-pointer"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>leaderboard</span>
@@ -328,18 +220,18 @@ export default function ProjectDetails() {
             <h3 className="font-semibold text-on-surface text-sm mb-4">Project Call Volume (Last 7 Days)</h3>
             <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={project.callsData} margin={{ top: 0, right: 8, left: -25, bottom: 0 }}>
+                <AreaChart data={defaultCallsData} margin={{ top: 0, right: 8, left: -25, bottom: 0 }}>
                   <defs>
                     <linearGradient id="projGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={project.color} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={project.color} stopOpacity={0} />
+                      <stop offset="5%" stopColor={activeProject.color || '#10b981'} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={activeProject.color || '#10b981'} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(60,74,66,0.2)" />
                   <XAxis dataKey="date" stroke="#86948a" tick={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} />
                   <YAxis stroke="#86948a" tick={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} />
                   <Tooltip contentStyle={{ background: '#1a211d', border: '1px solid rgba(60,74,66,0.5)', borderRadius: 8, color: '#dde4dd' }} />
-                  <Area type="monotone" dataKey="calls" stroke={project.color} strokeWidth={2} fill="url(#projGrad)" />
+                  <Area type="monotone" dataKey="calls" stroke={activeProject.color || '#10b981'} strokeWidth={2} fill="url(#projGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -431,7 +323,7 @@ export default function ProjectDetails() {
             <h3 className="font-semibold text-on-surface text-sm">Project Analytics Summary</h3>
             <div className="grid grid-cols-2 gap-3 pt-1">
               {[
-                { label: 'Total Calls', value: project.calls },
+                { label: 'Total Calls', value: activeProject.calls || '0' },
                 { label: 'Latency', value: '184ms' },
                 { label: 'Active Keys', value: keys.filter(k => k.status === 'Active').length },
                 { label: 'Health Score', value: '99.8%' },
@@ -448,11 +340,14 @@ export default function ProjectDetails() {
           <div className="bento-card p-6 flex flex-col gap-4">
             <h3 className="font-semibold text-on-surface text-sm">Assigned Contributors</h3>
             <div className="space-y-3">
-              {project.members.map((m, idx) => (
+              {(members.length ? members : [
+                { name: 'Jordan Martinez', email: 'j.martinez@company.com', role: 'Owner', avatar: 'JM' },
+                { name: 'Sam Rivera', email: 'sam.r@company.com', role: 'Developer', avatar: 'SR' },
+              ]).map((m, idx) => (
                 <div key={idx} className="flex items-center gap-3 justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-                      {m.avatar}
+                      {m.avatar || 'U'}
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-on-surface">{m.name}</p>
@@ -497,57 +392,107 @@ export default function ProjectDetails() {
               className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-surface border-l border-outline-variant/40 shadow-2xl flex flex-col z-[110]"
             >
               <div className="px-6 py-5 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container/50">
-                <h3 className="font-semibold text-on-surface" style={{ fontSize: 20 }}>Generate API Key</h3>
-                <button onClick={() => setShowCreateModal(false)} className="text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded cursor-pointer">
+                <h3 className="font-semibold text-on-surface" style={{ fontSize: 20 }}>
+                  {newKeyDetails ? 'Key Created' : 'Generate API Key'}
+                </h3>
+                <button onClick={handleCloseModal} className="text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded cursor-pointer">
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
 
-              <div className="flex-grow overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Key Label *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Production Mobile Auth"
-                    value={newKey.name}
-                    onChange={e => setNewKey(p => ({ ...p, name: e.target.value }))}
-                    className="glass-input w-full px-3 py-2.5 text-sm focus:border-primary outline-none"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2.5 uppercase tracking-wider">Scopes</label>
-                  <Select
-                    value={newKey.scope}
-                    onChange={val => setNewKey(p => ({ ...p, scope: val }))}
-                    options={['Read', 'Read/Write', 'Admin', 'Write']}
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-xs text-on-surface-variant mb-2.5 uppercase tracking-wider">Expiration</label>
-                  <Select
-                    value={newKey.expiry}
-                    onChange={val => setNewKey(p => ({ ...p, expiry: val }))}
-                    options={['30 Days', '60 Days', '90 Days', 'Never']}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+              {newKeyDetails ? (
+                <div className="flex-grow overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary text-2xl animate-pulse">lock_open</span>
+                      <p className="text-xs text-on-surface">
+                        <strong>Copy this secret key.</strong> For security, we cannot show this token again after you close this panel.
+                      </p>
+                    </div>
 
-              <div className="p-6 border-t border-outline-variant/30 bg-surface-container/30 flex justify-end gap-3">
-                <button onClick={() => setShowCreateModal(false)} className="btn-secondary px-4 py-2 text-sm rounded-lg cursor-pointer">Cancel</button>
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  disabled={!newKey.name.trim()}
-                  onClick={handleCreate}
-                  className="btn-primary px-5 py-2 text-sm shadow-emerald-sm rounded-lg disabled:opacity-50 cursor-pointer"
-                >
-                  Generate Key
-                </motion.button>
-              </div>
+                    <div className="space-y-2">
+                      <label className="block font-mono text-xs text-on-surface-variant uppercase tracking-wider">Key Label</label>
+                      <p className="font-bold text-sm text-on-surface">{newKeyDetails.name}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block font-mono text-xs text-on-surface-variant uppercase tracking-wider">Private Access Token</label>
+                      <div className="flex gap-2 items-center bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/40">
+                        <code className="font-mono text-xs text-primary select-all break-all flex-1">{newKeyDetails.key}</code>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleCopy('new', newKeyDetails.key)}
+                          className="btn-secondary p-2 rounded-lg cursor-pointer"
+                          title="Copy Key"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            {copiedId === 'new' ? 'check' : 'content_copy'}
+                          </span>
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseModal}
+                      className="w-full btn-primary py-3 rounded-lg font-bold text-sm shadow-emerald-sm cursor-pointer"
+                    >
+                      Done, I've Copied It
+                    </motion.button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex-grow overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Key Label *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Production Mobile Auth"
+                        value={newKey.name}
+                        onChange={e => setNewKey(p => ({ ...p, name: e.target.value }))}
+                        className="glass-input w-full px-3 py-2.5 text-sm focus:border-primary outline-none"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2.5 uppercase tracking-wider">Scopes</label>
+                      <Select
+                        value={newKey.scope}
+                        onChange={(val: string) => setNewKey(p => ({ ...p, scope: val }))}
+                        options={['Read', 'Read/Write', 'Admin', 'Write']}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-xs text-on-surface-variant mb-2.5 uppercase tracking-wider">Expiration</label>
+                      <Select
+                        value={newKey.expiry}
+                        onChange={(val: string) => setNewKey(p => ({ ...p, expiry: val }))}
+                        options={['30 Days', '60 Days', '90 Days', 'Never']}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-t border-outline-variant/30 bg-surface-container/30 flex justify-end gap-3">
+                    <button onClick={handleCloseModal} className="btn-secondary px-4 py-2 text-sm rounded-lg cursor-pointer">Cancel</button>
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={!newKey.name.trim()}
+                      onClick={handleCreate}
+                      className="btn-primary px-5 py-2 text-sm shadow-emerald-sm rounded-lg disabled:opacity-50 cursor-pointer"
+                    >
+                      Generate Key
+                    </motion.button>
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}

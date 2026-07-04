@@ -11,6 +11,7 @@ const navItems = [
   { to: '/analytics', icon: 'leaderboard', label: 'Analytics' },
   { to: '/reports', icon: 'description', label: 'Reports' },
   { to: '/alerts', icon: 'notifications', label: 'Alerts' },
+  { to: '/audits', icon: 'receipt_long', label: 'Audit Logs' },
   { to: '/team', icon: 'group', label: 'Team' },
   { to: '/settings', icon: 'settings', label: 'Settings' },
 ];

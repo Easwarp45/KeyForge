@@ -16,6 +16,7 @@ import ProjectDetails from './pages/ProjectDetails';
 import Landing from './pages/Landing';
 import VerifyEmail from './pages/VerifyEmail';
 import CreateOrg from './pages/CreateOrg';
+import AuditLogs from './pages/AuditLogs';
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/audits" element={<AuditLogs />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

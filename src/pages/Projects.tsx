@@ -1,21 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-
-type Project = {
-  id: number; name: string; description: string; keys: number;
-  calls: string; status: 'Healthy' | 'Warning' | 'Inactive';
-  updated: string; icon: string; color: string;
-};
-
-const initialProjects: Project[] = [
-  { id: 1, name: 'Payment Gateway', description: 'Handles all payment processing and billing APIs.', keys: 14, calls: '2.4M', status: 'Healthy', updated: '2 hours ago', icon: 'payments', color: '#10b981' },
-  { id: 2, name: 'User Auth Service', description: 'Authentication and session management APIs.', keys: 8, calls: '890K', status: 'Healthy', updated: '5 hours ago', icon: 'lock', color: '#d0bcff' },
-  { id: 3, name: 'Data Pipeline', description: 'ETL and data transformation services.', keys: 6, calls: '340K', status: 'Warning', updated: '1 day ago', icon: 'storage', color: '#ffb3af' },
-  { id: 4, name: 'Phoenix Engine', description: 'Core API orchestration and routing layer.', keys: 22, calls: '5.1M', status: 'Healthy', updated: '30 min ago', icon: 'hub', color: '#10b981' },
-  { id: 5, name: 'CyberVault Auth', description: 'Enterprise identity and access management.', keys: 11, calls: '1.2M', status: 'Healthy', updated: '1 hour ago', icon: 'shield', color: '#4edea3' },
-  { id: 6, name: 'Nexus Data Hub', description: 'Centralized data lake integration APIs.', keys: 5, calls: '78K', status: 'Inactive', updated: '3 days ago', icon: 'cloud', color: '#86948a' },
-];
+import { getProjects, createProject, deleteProject, getKeys, type Project } from '../api';
 
 const statusBadge: Record<string, string> = {
   Healthy: 'badge-active',
@@ -29,32 +15,51 @@ const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transiti
 export default function Projects() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [totalKeys, setTotalKeys] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Healthy' | 'Warning' | 'Inactive'>('All');
   const [showNewModal, setShowNewModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([getProjects(), getKeys()])
+      .then(([projData, keyData]) => {
+        setProjects(projData);
+        setTotalKeys(keyData.length);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
   }, [searchParams]);
 
   const filtered = projects
-    .filter(p => statusFilter === 'All' || p.status === statusFilter)
+    .filter(p => statusFilter === 'All' || (p.status || 'Healthy') === statusFilter)
     .filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.description.toLowerCase().includes(search.toLowerCase()));
 
   const handleCreateProject = () => {
     if (!newName.trim()) return;
-    setProjects(prev => [...prev, {
-      id: Date.now(), name: newName, description: newDesc || 'No description provided.',
-      keys: 0, calls: '0', status: 'Healthy', updated: 'Just now', icon: 'folder', color: '#4edea3',
-    }]);
-    setShowNewModal(false); setNewName(''); setNewDesc('');
+    createProject(newName, 'Dev', newDesc)
+      .then(newProj => {
+        setProjects(prev => [newProj, ...prev]);
+        setShowNewModal(false); setNewName(''); setNewDesc('');
+      })
+      .catch(console.error);
   };
 
-  const handleDeleteProject = (id: number) => setProjects(prev => prev.filter(p => p.id !== id));
+  const handleDeleteProject = (id: string) => {
+    deleteProject(id)
+      .then(() => {
+        setProjects(prev => prev.filter(p => p.id !== id));
+      })
+      .catch(console.error);
+  };
 
   return (
     <div className="max-w-[1440px] mx-auto">
@@ -91,10 +96,10 @@ export default function Projects() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Projects', value: projects.length, icon: 'folder', filter: 'All' as const },
-          { label: 'Healthy', value: projects.filter(p => p.status === 'Healthy').length, icon: 'check_circle', color: 'text-primary', filter: 'Healthy' as const },
-          { label: 'Warnings', value: projects.filter(p => p.status === 'Warning').length, icon: 'warning', color: 'text-tertiary', filter: 'Warning' as const },
-          { label: 'Total Keys', value: projects.reduce((a, p) => a + p.keys, 0), icon: 'vpn_key', color: 'text-secondary', filter: 'All' as const },
+          { label: 'Total Projects', value: loading ? '...' : projects.length, icon: 'folder', filter: 'All' as const },
+          { label: 'Healthy', value: loading ? '...' : projects.filter(p => (p.status || 'Healthy') === 'Healthy').length, icon: 'check_circle', color: 'text-primary', filter: 'Healthy' as const },
+          { label: 'Warnings', value: loading ? '...' : projects.filter(p => p.status === 'Warning').length, icon: 'warning', color: 'text-tertiary', filter: 'Warning' as const },
+          { label: 'Total Keys', value: loading ? '...' : totalKeys, icon: 'vpn_key', color: 'text-secondary', filter: 'All' as const },
         ].map(s => (
           <motion.button
             key={s.label}
@@ -132,7 +137,12 @@ export default function Projects() {
       {/* Project grid */}
       <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-bento-gap">
         <AnimatePresence>
-          {filtered.map(p => (
+          {loading ? (
+            <div className="col-span-full py-12 text-center text-on-surface-variant font-mono text-sm">
+              <span className="material-symbols-outlined animate-spin align-middle mr-2" style={{ fontSize: 20 }}>progress_activity</span>
+              Loading projects...
+            </div>
+          ) : filtered.map(p => (
             <motion.div
               key={p.id}
               variants={item}
@@ -143,12 +153,12 @@ export default function Projects() {
               className="bento-card p-6 flex flex-col gap-4 cursor-pointer"
             >
               <div className="flex justify-between items-start">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${p.color}20` }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 24, color: p.color }}>{p.icon}</span>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${p.color || '#4edea3'}20` }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 24, color: p.color || '#4edea3' }}>{p.icon || 'folder'}</span>
                 </div>
-                <span className={statusBadge[p.status]}>
-                  <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: p.status === 'Healthy' ? '#4edea3' : p.status === 'Warning' ? '#ffb3af' : '#86948a' }} />
-                  {p.status}
+                <span className={statusBadge[p.status || 'Healthy']}>
+                  <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: (p.status || 'Healthy') === 'Healthy' ? '#4edea3' : p.status === 'Warning' ? '#ffb3af' : '#86948a' }} />
+                  {p.status || 'Healthy'}
                 </span>
               </div>
 
@@ -160,15 +170,15 @@ export default function Projects() {
               <div className="flex gap-6 border-t border-outline-variant/20 pt-4">
                 <div>
                   <p className="font-mono text-xs text-on-surface-variant uppercase tracking-wider">Keys</p>
-                  <p className="font-bold text-on-surface mt-0.5">{p.keys}</p>
+                  <p className="font-bold text-on-surface mt-0.5">{p.keys || 0}</p>
                 </div>
                 <div>
                   <p className="font-mono text-xs text-on-surface-variant uppercase tracking-wider">API Calls</p>
-                  <p className="font-bold text-on-surface mt-0.5">{p.calls}</p>
+                  <p className="font-bold text-on-surface mt-0.5">{p.calls || '0'}</p>
                 </div>
                 <div className="ml-auto text-right">
                   <p className="font-mono text-xs text-on-surface-variant uppercase tracking-wider">Updated</p>
-                  <p className="font-mono text-xs text-on-surface-variant mt-0.5">{p.updated}</p>
+                  <p className="font-mono text-xs text-on-surface-variant mt-0.5">{p.updated || 'Just now'}</p>
                 </div>
               </div>
 

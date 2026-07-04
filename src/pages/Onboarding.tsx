@@ -17,10 +17,10 @@ export default function Onboarding() {
   const [keyLabel, setKeyLabel] = useState('');
   const [scopes, setScopes] = useState<Record<string, boolean>>({
     read: true,
-    write: false,
-    admin: false,
-    webhooks: false,
-    analytics: false,
+    write: true,
+    admin: true,
+    webhooks: true,
+    analytics: true,
   });
   const [expiry, setExpiry] = useState<'30d' | '90d' | '1y' | 'Never'>('30d');
 

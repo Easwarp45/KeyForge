@@ -9,6 +9,7 @@ const pageTitles: Record<string, string> = {
   '/analytics': 'Search analytics, logs...',
   '/reports': 'Search reports...',
   '/alerts': 'Search alerts...',
+  '/audits': 'Search audits...',
   '/team': 'Search members...',
   '/settings': 'Search settings...',
 };
