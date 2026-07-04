@@ -127,51 +127,39 @@ export default function Landing() {
           </motion.div>
         </section>
 
-        {/* Pricing Plan Bento Section */}
+        {/* Pricing Plan Bento Section - Redesigned to be Completely Free */}
         <section id="pricing" className="w-full text-left mb-16">
-          <div className="text-center mb-8">
-            <h3 className="font-bold text-on-surface text-2xl">Simple, transparent pricing</h3>
-            <p className="text-on-surface-variant text-sm mt-2">Scale API protection from startup to enterprise scope.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { title: 'Developer', price: '$0', desc: 'Perfect for side projects & testing.', features: ['Up to 5 Projects', '15 Active Keys', 'Basic Analytics', 'SHA-256 Hashing'], action: 'Sign Up Free' },
-              { title: 'Scale', price: '$49', desc: 'Growing businesses managing production APIs.', features: ['Unlimited Projects', '150 Active Keys', 'Advanced Heatmaps', 'IP Allowlisting', 'Webhook Triggers'], action: 'Start Scale Trial', popular: true },
-              { title: 'Enterprise', price: 'Custom', desc: 'Custom volume & compliance controls.', features: ['Dedicated Key Server', 'Unlimited Keys', 'Custom SLA / Uptime', '24/7 Priority Support', 'Audited Access Logs'], action: 'Contact Support' },
-            ].map(p => (
-              <div
-                key={p.title}
-                className={`bento-card p-6 flex flex-col justify-between border ${p.popular ? 'border-primary shadow-[0_0_20px_rgba(16,185,129,0.15)] bg-[#10b981]/5' : 'border-outline-variant/30 bg-[#121915]/50'}`}
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="font-bold text-on-surface text-lg">{p.title}</h4>
-                    {p.popular && <span className="text-[10px] font-bold text-[#002113] bg-primary px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">Popular</span>}
+          <div className="bento-card p-8 border border-primary/20 bg-primary/5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-8 shadow-emerald-sm">
+            <div className="max-w-xl">
+              <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded uppercase tracking-wider font-mono">100% Free</span>
+              <h3 className="font-bold text-on-surface text-3xl mt-3 mb-2">Completely Free & Open Source</h3>
+              <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
+                KeyForge is dedicated to securing API endpoints for developers everywhere. No hidden charges, no seat limits, and no active key quotas.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { icon: 'hub', label: 'Unlimited Projects' },
+                  { icon: 'key', label: 'Unlimited API Keys' },
+                  { icon: 'history', label: 'Immutable Logs' },
+                  { icon: 'bolt', label: 'Sub-ms Gateways' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center gap-2 text-xs font-mono text-on-surface">
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>{item.icon}</span>
+                    {item.label}
                   </div>
-                  <div className="mb-3">
-                    <span className="text-3xl font-black text-on-surface">{p.price}</span>
-                    {p.price !== 'Custom' && <span className="text-xs text-on-surface-variant"> / month</span>}
-                  </div>
-                  <p className="text-on-surface-variant text-xs mb-5">{p.desc}</p>
-                  <ul className="space-y-2 mb-6">
-                    {p.features.map(f => (
-                      <li key={f} className="text-xs text-on-surface flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => navigate('/sign-up')}
-                  className={`w-full py-2 text-xs font-semibold rounded-lg cursor-pointer ${p.popular ? 'bg-primary text-[#002113]' : 'btn-secondary'}`}
-                >
-                  {p.action}
-                </motion.button>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="flex-shrink-0 w-full md:w-auto">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/sign-up')}
+                className="w-full md:w-64 bg-primary text-[#002113] py-3.5 px-6 rounded-xl font-bold text-sm hover:shadow-[0_0_25px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
+              >
+                Start Protecting APIs →
+              </motion.button>
+            </div>
           </div>
         </section>
       </main>
