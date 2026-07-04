@@ -17,6 +17,7 @@ import Landing from './pages/Landing';
 import VerifyEmail from './pages/VerifyEmail';
 import CreateOrg from './pages/CreateOrg';
 import AuditLogs from './pages/AuditLogs';
+import AuthCallback from './pages/AuthCallback';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/create-org" element={<CreateOrg />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* App pages */}
         <Route element={<Layout />}>
