@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TopBar from './TopBar';
 import Footer from './Footer';
+import { supabaseClient } from '../api';
 
 const navItems = [
   { to: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
@@ -21,6 +22,24 @@ export default function Layout() {
   const location = useLocation();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showSupportToast, setShowSupportToast] = useState(false);
+
+  useEffect(() => {
+    if (supabaseClient) {
+      supabaseClient.auth.getSession().then(({ data: { session } }) => {
+        if (!session) {
+          navigate('/sign-in');
+        }
+      });
+
+      const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') {
+          navigate('/sign-in');
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    }
+  }, [navigate]);
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';

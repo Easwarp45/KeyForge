@@ -1,3 +1,41 @@
+import { createClient } from '@supabase/supabase-js';
+
+// ── Supabase Auth Client Setup ──────────────────────────────────────────────
+let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+if (supabaseUrl && !supabaseUrl.includes('://')) {
+  supabaseUrl = `https://${supabaseUrl}.supabase.co`;
+}
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+export const supabaseClient = (supabaseUrl && supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+export async function signInWithOAuth(provider: 'google' | 'github') {
+  if (!supabaseClient) {
+    console.log(`Mocking oauth sign in with ${provider}`);
+    window.location.href = '/dashboard';
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/dashboard`
+    }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function signOut() {
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut();
+  }
+  window.location.href = '/';
+}
+
 // ── KeyForge Unified API Client ─────────────────────────────────────────────
 // Abstracted API methods connecting frontend to Vercel Serverless `/api/*`
 

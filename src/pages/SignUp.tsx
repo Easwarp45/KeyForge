@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { signInWithOAuth } from '../api';
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -44,11 +45,19 @@ export default function SignUp() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <button className="flex items-center justify-center gap-3 w-full h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-white font-bold transition-all border border-outline-variant/30 hover:border-primary/30">
+            <button
+              type="button"
+              onClick={() => signInWithOAuth('github')}
+              className="flex items-center justify-center gap-3 w-full h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-white font-bold transition-all border border-outline-variant/30 hover:border-primary/30 cursor-pointer"
+            >
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>terminal</span>
               Continue with GitHub
             </button>
-            <button className="flex items-center justify-center gap-3 w-full h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-white font-bold transition-all border border-outline-variant/30 hover:border-primary/30">
+            <button
+              type="button"
+              onClick={() => signInWithOAuth('google')}
+              className="flex items-center justify-center gap-3 w-full h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-white font-bold transition-all border border-outline-variant/30 hover:border-primary/30 cursor-pointer"
+            >
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>account_circle</span>
               Continue with Google
             </button>

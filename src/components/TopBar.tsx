@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { signOut } from '../api';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Search resources...',
@@ -184,8 +185,8 @@ export default function TopBar() {
                   ))}
                   <div className="border-t border-outline-variant/30 mt-1">
                     <button
-                      onClick={() => navigate('/')}
-                      className="w-full text-left px-4 py-2.5 text-sm text-error hover:bg-error/10 transition-colors flex items-center gap-2"
+                      onClick={() => signOut()}
+                      className="w-full text-left px-4 py-2.5 text-sm text-error hover:bg-error/10 transition-colors flex items-center gap-2 cursor-pointer"
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>logout</span>
                       Sign Out
