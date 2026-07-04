@@ -30,7 +30,7 @@ export default function AuditLogs() {
   useEffect(() => {
     getAudits()
       .then(setLogs)
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

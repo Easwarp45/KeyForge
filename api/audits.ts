@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse, supabase, isLiveMode, mockStore, enableCors } from './utils.js';
+import { VercelRequest, VercelResponse, supabase, isLiveMode, mockStore, enableCors, safeError } from './utils.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (enableCors(req, res)) return;
@@ -38,6 +38,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(mockStore.audits);
     }
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Internal Server Error' });
+    return safeError(res, 500, 'An internal error occurred. Please try again.');
   }
 }

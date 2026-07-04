@@ -61,7 +61,7 @@ export default function ProjectDetails() {
         setKeys(keyData);
         setMembers(teamData.slice(0, 3));
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -87,7 +87,7 @@ export default function ProjectDetails() {
   const handleDelete = (idVal: string | number) => {
     revokeKey(idVal)
       .then(() => setKeys(prev => prev.filter(k => k.id !== idVal)))
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleDisable = (idVal: string | number) => {
@@ -98,7 +98,7 @@ export default function ProjectDetails() {
       .then(updated => {
         setKeys(prev => prev.map(k => k.id === idVal ? { ...k, status: updated.status } : k));
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleRotate = (idVal: string | number) => {
@@ -109,7 +109,7 @@ export default function ProjectDetails() {
         setShowCreateModal(true); // Re-use modal or open to display plaintext
         setKeys(prev => prev.map(k => k.id === idVal ? { ...k, key: updated.key } : k));
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setRotatingId(null));
   };
 
@@ -126,7 +126,7 @@ export default function ProjectDetails() {
         setNewKeyDetails(createdKey); // Show generated secret once!
         setNewKey({ name: '', scope: 'Read/Write', expiry: '30 Days' });
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleCloseModal = () => {

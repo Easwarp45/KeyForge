@@ -135,18 +135,45 @@ export async function writeAuditLog(params: {
 }
 
 // Cors wrapper helper for endpoints
+const ALLOWED_ORIGINS = [
+  'https://key-forge-five.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:4173',
+];
+
 export function enableCors(req: VercelRequest, res: VercelResponse): boolean {
+  const origin = req.headers['origin'] as string || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
   );
+  res.setHeader('Vary', 'Origin');
+
+  // ── Security Headers ──────────────────────────────────────────────────────
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none';"
+  );
+  res.setHeader('X-Powered-By', ''); // Remove server fingerprint
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return true;
   }
   return false;
+}
+
+// Sanitized error response — never expose internal error messages to client
+export function safeError(res: VercelResponse, statusCode: number, clientMessage: string): VercelResponse {
+  return res.status(statusCode).json({ error: clientMessage });
 }

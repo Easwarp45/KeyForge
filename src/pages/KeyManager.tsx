@@ -44,7 +44,7 @@ export default function KeyManager() {
           setNewKey(p => ({ ...p, projectId: projData[0].id }));
         }
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -67,7 +67,7 @@ export default function KeyManager() {
   const handleDelete = (idVal: string | number) => {
     revokeKey(idVal)
       .then(() => setKeys(prev => prev.filter(k => k.id !== idVal)))
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleDisable = (idVal: string | number) => {
@@ -78,7 +78,7 @@ export default function KeyManager() {
       .then(updated => {
         setKeys(prev => prev.map(k => k.id === idVal ? { ...k, status: updated.status } : k));
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleRotate = (idVal: string | number) => {
@@ -89,7 +89,7 @@ export default function KeyManager() {
         setShowModal(true);
         setKeys(prev => prev.map(k => k.id === idVal ? { ...k, key: updated.key } : k));
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setRotatingId(null));
   };
 
@@ -106,7 +106,7 @@ export default function KeyManager() {
         setNewKeyDetails(createdKey);
         setNewKey(p => ({ ...p, name: '' }));
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleCloseModal = () => {

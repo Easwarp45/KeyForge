@@ -12,7 +12,7 @@ export default defineConfig({
       deadCodeInjection: false,
       debugProtection: true,
       debugProtectionInterval: 4000,
-      disableConsoleOutput: false,
+      disableConsoleOutput: true,      // ✅ Block all console output in production
       identifierNamesGenerator: 'hexadecimal',
       log: false,
       numbersToExpressions: true,

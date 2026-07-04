@@ -31,7 +31,7 @@ export default function Projects() {
         setProjects(projData);
         setTotalKeys(keyData.length);
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -50,7 +50,7 @@ export default function Projects() {
         setProjects(prev => [newProj, ...prev]);
         setShowNewModal(false); setNewName(''); setNewDesc('');
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleDeleteProject = (id: string) => {
@@ -58,7 +58,7 @@ export default function Projects() {
       .then(() => {
         setProjects(prev => prev.filter(p => p.id !== id));
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   return (

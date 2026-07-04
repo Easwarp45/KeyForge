@@ -13,7 +13,7 @@ export const supabaseClient = (supabaseUrl && supabaseAnonKey)
 
 export async function signInWithOAuth(provider: 'google' | 'github') {
   if (!supabaseClient) {
-    console.log(`Mocking oauth sign in with ${provider}`);
+    // Development fallback — no logging in production
     window.location.href = '/dashboard';
     return;
   }
@@ -52,7 +52,8 @@ export async function fetchJson<T>(url: string, options?: RequestInit): Promise<
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `HTTP error! Status: ${res.status}`);
+    // Surface only the server's user-safe message; never raw status codes or stack traces
+    throw new Error(errorData.error || 'An unexpected error occurred. Please try again.');
   }
 
   return res.json() as Promise<T>;

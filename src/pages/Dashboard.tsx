@@ -60,7 +60,7 @@ export default function Dashboard() {
         setKeys(keyData);
         setActivity(auditData.slice(0, 3));
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

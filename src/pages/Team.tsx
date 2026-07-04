@@ -32,7 +32,7 @@ export default function Team() {
   useEffect(() => {
     getTeam()
       .then(setMembers)
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -47,7 +47,7 @@ export default function Team() {
         setEmail('');
         setName('');
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleDelete = (idVal: string | number) => {
@@ -55,7 +55,7 @@ export default function Team() {
       .then(() => {
         setMembers(prev => prev.filter(m => m.id !== idVal));
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const handleEditClick = (member: TeamMember) => {
@@ -73,7 +73,7 @@ export default function Team() {
         setMembers(prev => prev.map(m => m.id === editingMember.id ? { ...m, name: updated.name, role: updated.role } : m));
         setEditingMember(null);
       })
-      .catch(console.error);
+      .catch(() => {});
   };
 
   const filteredMembers = members.filter(m => {
