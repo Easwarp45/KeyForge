@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { signInWithOAuth } from '../api';
+import { signInWithOAuth, signInWithEmail } from '../api';
 
 export default function SignIn() {
   const navigate = useNavigate();
@@ -13,16 +13,33 @@ export default function SignIn() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
+
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    setSuccess(true);
-    setTimeout(() => navigate('/dashboard'), 800);
+
+    try {
+      // WHY: Previously this was a fake 1.5s timer that always succeeded.
+      // Now it calls Supabase's real signInWithPassword. If credentials are
+      // wrong, the user gets an honest error rather than silently being let in.
+      await signInWithEmail(email, password);
+      setSuccess(true);
+      setTimeout(() => navigate('/dashboard'), 600);
+    } catch (err: unknown) {
+      // Surface a user-friendly message — never expose raw Supabase error codes
+      const msg = err instanceof Error ? err.message : 'Sign in failed.';
+      setError(
+        msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials')
+          ? 'Email or passkey not recognized. Please try again or use social sign-in.'
+          : msg
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,7 +98,7 @@ export default function SignIn() {
             <div className="flex-grow border-t border-outline-variant/30" />
           </div>
 
-          {/* Form */}
+          {/* Email/password form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="floating-label-group">
               <input
@@ -91,6 +108,7 @@ export default function SignIn() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                aria-describedby={error ? 'signin-error' : undefined}
                 className="w-full h-14 bg-surface-container-low border border-outline-variant/50 rounded-lg px-4 text-white transition-all focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
               <label htmlFor="email" className="font-medium">Email Address</label>
@@ -105,13 +123,21 @@ export default function SignIn() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby={error ? 'signin-error' : undefined}
                   className="w-full h-14 bg-surface-container-low border border-outline-variant/50 rounded-lg px-4 text-white transition-all focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <label htmlFor="password" className="font-medium">Password</label>
               </div>
               <div className="flex justify-between items-center">
-                {error && <p className="text-error text-xs">{error}</p>}
-                <a href="#" className="text-primary text-sm font-semibold hover:underline ml-auto">Forgot password?</a>
+                {/* aria-live so screen readers announce auth errors immediately */}
+                {error && (
+                  <p id="signin-error" role="alert" aria-live="assertive" className="text-error text-xs">
+                    {error}
+                  </p>
+                )}
+                <a href="#" className="text-primary text-sm font-semibold hover:underline ml-auto">
+                  Forgot password?
+                </a>
               </div>
             </div>
 

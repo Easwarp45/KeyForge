@@ -23,22 +23,38 @@ export default function Layout() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showSupportToast, setShowSupportToast] = useState(false);
 
+  /**
+   * WHY authChecked gate: Previously the Layout rendered its children immediately
+   * and then fired an async getSession() call. This meant protected pages flashed
+   * their content for ~100ms before the redirect to /sign-in. Adding authChecked
+   * shows a loading spinner until the session is confirmed, preventing that leak.
+   *
+   * In dev mode (no Supabase), we skip the check entirely so local dev works.
+   */
+  const [authChecked, setAuthChecked] = useState(!supabaseClient);
+
   useEffect(() => {
-    if (supabaseClient) {
-      supabaseClient.auth.getSession().then(({ data: { session } }) => {
-        if (!session) {
-          navigate('/sign-in');
-        }
-      });
+    if (!supabaseClient) return; // dev mode — no auth check needed
 
-      const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT') {
-          navigate('/sign-in');
-        }
-      });
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/sign-in', { replace: true });
+      } else {
+        setAuthChecked(true); // session confirmed — safe to render children
+      }
+    });
 
-      return () => subscription.unsubscribe();
-    }
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthChecked(false);
+        navigate('/sign-in', { replace: true });
+      }
+      if (event === 'SIGNED_IN') {
+        setAuthChecked(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const toggleTheme = () => {
@@ -52,11 +68,27 @@ export default function Layout() {
     setTimeout(() => setShowSupportToast(false), 3000);
   };
 
+  // ── Loading Gate ───────────────────────────────────────────────────────────
+  // WHY: Blocks rendering until auth is verified. Shows a minimal spinner
+  // rather than flashing the protected UI to unauthenticated visitors.
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+          </div>
+          <p className="text-on-surface-variant text-sm font-mono tracking-wider">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background text-on-surface overflow-hidden">
       {/* Sidebar */}
       <nav className="hidden md:flex flex-col h-full py-6 px-4 bg-surface/80 backdrop-blur-xl border-r border-outline-variant/30 shadow-xl w-64 fixed left-0 top-0 z-50">
-        {/* Logo — clicking goes to dashboard */}
+        {/* Logo */}
         <button
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-3 px-2 mb-8 group"
@@ -150,7 +182,10 @@ export default function Layout() {
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-5 py-3 rounded-xl bg-surface-container-high border border-outline-variant/40 shadow-2xl"
           >
             <span className="material-symbols-outlined text-primary" style={{ fontSize: 20 }}>support_agent</span>
-            <p className="text-on-surface text-sm font-medium">Opening support portal... <span className="text-primary">support@keyforge.dev</span></p>
+            <p className="text-on-surface text-sm font-medium">
+              Opening support portal...{' '}
+              <span className="text-primary">support@keyforge.dev</span>
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,4 +1,8 @@
-import { VercelRequest, VercelResponse, supabase, isLiveMode, mockStore, hashApiKey, writeAuditLog, enableCors, safeError } from './utils.js';
+import {
+  VercelRequest, VercelResponse,
+  supabase, isLiveMode, mockStore,
+  hashApiKey, writeAuditLog, enableCors, safeError, checkRateLimit
+} from './utils.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (enableCors(req, res)) return;
@@ -10,17 +14,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: `Method ${method} Not Allowed` });
   }
 
-  const { key, requiredScope } = req.body;
-  if (!key) {
-    return res.status(400).json({ valid: false, error: 'API key is required in request body' });
+  const ip = req.headers['x-forwarded-for'] as string || req.socket?.remoteAddress || '127.0.0.1';
+
+  // ── Rate Limiting ──────────────────────────────────────────────────────────
+  // WHY: The validate endpoint is called by external services to check keys.
+  // Without a rate limit, an attacker could enumerate valid keys through rapid
+  // brute-force (even though keys are long, limiting attempts is defense-in-depth).
+  // 100 validations per minute per IP is generous for legitimate use.
+  if (checkRateLimit(`validate:${ip}`, 100, 60_000)) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({
+      valid: false,
+      error: 'Too many requests. Rate limit exceeded. Please retry after 60 seconds.'
+    });
   }
 
-  const ip = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1';
-  const hashed = hashApiKey(key);
+  const { key, requiredScope } = req.body as { key?: unknown; requiredScope?: unknown };
+
+  if (!key) {
+    return res.status(400).json({ valid: false, error: 'API key is required in the request body.' });
+  }
+
+  const keyStr = String(key);
+  const hashed = hashApiKey(keyStr);
 
   try {
     if (isLiveMode && supabase) {
-      // Look up key prefix and details
       const { data: keyRecord, error } = await supabase
         .from('api_keys')
         .select(`
@@ -33,125 +52,112 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (error) throw error;
 
       if (!keyRecord) {
-        // Log unauthorized attempt
         await writeAuditLog({
           action: 'Key Validation Failed',
           category: 'Key Operations',
-          target: `${key.slice(0, 12)}...`,
+          target: `${keyStr.slice(0, 12)}...`,
           actorName: 'Anonymous Caller',
-          actorEmail: 'unknown-client@ip.address',
+          actorEmail: 'unknown@client',
           ipAddress: ip,
           location: 'Internet Access Gate',
           severity: 'Warning'
         });
-
-        return res.status(401).json({ valid: false, error: 'Invalid API Key' });
+        return res.status(401).json({ valid: false, error: 'Invalid API key.' });
       }
 
-      const keyDetails: any = keyRecord;
+      const kd = keyRecord as {
+        id: string; name: string; scope: string; expiry: string | null;
+        status: string; project_id: string; projects: { org_id: string; name: string }
+      };
 
-      // Verify status
-      if (keyDetails.status !== 'Active') {
-        return res.status(403).json({
-          valid: false,
-          error: `Key status is currently: ${keyDetails.status}`
-        });
+      if (kd.status !== 'Active') {
+        return res.status(403).json({ valid: false, error: `Key is currently ${kd.status.toLowerCase()}.` });
       }
 
-      // Verify expiration
-      if (keyDetails.expiry && new Date(keyDetails.expiry) < new Date()) {
-        // Automatically deactivate expired keys
-        await supabase
-          .from('api_keys')
-          .update({ status: 'Disabled' })
-          .eq('id', keyDetails.id);
-
-        return res.status(403).json({ valid: false, error: 'API Key has expired' });
+      if (kd.expiry && new Date(kd.expiry) < new Date()) {
+        // Auto-deactivate expired keys
+        await supabase.from('api_keys').update({ status: 'Disabled' }).eq('id', kd.id);
+        return res.status(403).json({ valid: false, error: 'API key has expired.' });
       }
 
-      // Verify scope if requested
       if (requiredScope) {
-        const allowed = checkScope(keyDetails.scope, requiredScope);
-        if (!allowed) {
+        if (!checkScope(kd.scope, String(requiredScope))) {
           return res.status(403).json({
             valid: false,
-            error: `Insufficient scopes. Required: ${requiredScope}, Authorized: ${keyDetails.scope}`
+            error: `Insufficient scope. Required: ${requiredScope}, Authorized: ${kd.scope}`
           });
         }
       }
 
-      // Success! Log validation telemetry
       await writeAuditLog({
-        orgId: keyDetails.projects.org_id,
+        orgId: kd.projects.org_id,
         action: 'Key Validated',
         category: 'Key Operations',
-        target: keyDetails.name,
+        target: kd.name,
         actorName: 'Gateway Process',
-        actorEmail: 'gateway-daemon@keyforge.dev',
+        actorEmail: 'gateway@keyforge.dev',
         ipAddress: ip,
         location: 'API Gate Proxy'
       });
 
       return res.status(200).json({
         valid: true,
-        keyId: keyDetails.id,
-        keyName: keyDetails.name,
-        scope: keyDetails.scope,
-        projectName: keyDetails.projects.name
+        keyId: kd.id,
+        keyName: kd.name,
+        scope: kd.scope,
+        projectName: kd.projects.name
       });
     } else {
-      // Fallback Mock validation
-      const keyRecord = mockStore.keys.find(k => k.key === key);
+      // Mock mode: compare raw key directly (no hashing in dev store)
+      const keyRecord = mockStore.keys.find(k => k.key === keyStr);
 
       if (!keyRecord) {
         await writeAuditLog({
           action: 'Key Validation Failed',
           category: 'Key Operations',
-          target: `${key.slice(0, 12)}...`,
+          target: `${keyStr.slice(0, 12)}...`,
           actorName: 'Anonymous Caller',
-          actorEmail: 'unknown-client@ip.address',
+          actorEmail: 'unknown@client',
           ipAddress: ip,
-          location: 'Local Network Gate',
+          location: 'Local Dev Gate',
           severity: 'Warning'
         });
-        return res.status(401).json({ valid: false, error: 'Invalid API Key' });
+        return res.status(401).json({ valid: false, error: 'Invalid API key.' });
       }
 
       if (keyRecord.status !== 'Active') {
-        return res.status(403).json({ valid: false, error: `Key status is: ${keyRecord.status}` });
+        return res.status(403).json({ valid: false, error: `Key is ${keyRecord.status.toLowerCase()}.` });
       }
 
-      if (requiredScope && !checkScope(keyRecord.scope, requiredScope)) {
+      if (requiredScope && !checkScope(keyRecord.scope, String(requiredScope))) {
         return res.status(403).json({
           valid: false,
-          error: `Insufficient scopes. Required: ${requiredScope}, Authorized: ${keyRecord.scope}`
+          error: `Insufficient scope. Required: ${requiredScope}, Authorized: ${keyRecord.scope}`
         });
       }
 
-      // Success
       await writeAuditLog({
         action: 'Key Validated',
         category: 'Key Operations',
         target: keyRecord.name,
-        actorName: 'Gateway Process (Mock)',
-        actorEmail: 'gateway-daemon@keyforge.dev',
+        actorName: 'Gateway Process (Dev)',
+        actorEmail: 'gateway@keyforge.dev',
         ipAddress: ip,
-        location: 'Mock Loopback'
+        location: 'Local Dev Gate'
       });
 
-      return res.status(200).json({
-        valid: true,
-        keyId: keyRecord.id,
-        keyName: keyRecord.name,
-        scope: keyRecord.scope
-      });
+      return res.status(200).json({ valid: true, keyId: keyRecord.id, keyName: keyRecord.name, scope: keyRecord.scope });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
+    console.error('[/api/validate] Error:', err instanceof Error ? err.message : err);
     return safeError(res, 500, 'An internal error occurred. Please try again.');
   }
 }
 
-// Scope check hierarchy: Admin covers everything. Read/Write covers Read and Write.
+/**
+ * Scope hierarchy: Admin > Read/Write > (Read | Write) > individual scopes.
+ * Returns true if the authorized scope grants the required scope.
+ */
 function checkScope(authorized: string, required: string): boolean {
   if (authorized === 'Admin') return true;
   if (authorized === required) return true;

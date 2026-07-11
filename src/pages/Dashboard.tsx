@@ -52,10 +52,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([getProjects(), getKeys(), getAudits()])
-      .then(([projData, keyData, auditData]) => {
+      .then(([projData, keyData, auditResponse]) => {
         setProjects(projData);
         setKeys(keyData);
-        setActivity(auditData.slice(0, 3));
+        // getAudits now returns a paginated response — extract .logs
+        setActivity(auditResponse.logs.slice(0, 3));
       })
       .catch(() => {})
       .finally(() => setLoading(false));

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { signOut } from '../api';
+import { signOut, supabaseClient } from '../api';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Search resources...',
@@ -32,6 +32,34 @@ export default function TopBar() {
   const navigate = useNavigate();
   const placeholder = pageTitles[location.pathname] ?? 'Search...';
   const unread = notifs.filter(n => !n.read).length;
+
+  const [profile, setProfile] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    if (supabaseClient) {
+      supabaseClient.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const user = session.user;
+          const email = user.email || '';
+          const name = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0] || 'User';
+          setProfile({ name, email });
+        }
+      });
+
+      const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          const user = session.user;
+          const email = user.email || '';
+          const name = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0] || 'User';
+          setProfile({ name, email });
+        } else {
+          setProfile(null);
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    }
+  }, []);
 
   const markAllRead = () => setNotifs(n => n.map(x => ({ ...x, read: true })));
   const dismiss = (id: number) => setNotifs(n => n.filter(x => x.id !== id));
@@ -145,11 +173,11 @@ export default function TopBar() {
             className="flex items-center gap-3 pl-4 ml-2 border-l border-outline-variant/20"
           >
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-on-surface leading-none">DevMaster_01</p>
-              <p className="text-[10px] text-on-surface-variant mt-1">Enterprise Admin</p>
+              <p className="text-sm font-bold text-on-surface leading-none">{profile?.name || 'Developer'}</p>
+              <p className="text-[10px] text-on-surface-variant mt-1">{profile?.email ? 'Member' : 'Admin'}</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-sm border border-outline-variant hover:border-primary transition-colors">
-              D
+              {(profile?.name || 'D')[0].toUpperCase()}
             </div>
           </button>
 
@@ -159,15 +187,15 @@ export default function TopBar() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 w-52 z-50 bg-surface border border-outline-variant/40 rounded-xl shadow-2xl overflow-hidden"
+                   initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                   animate={{ opacity: 1, y: 0, scale: 1 }}
+                   exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                   transition={{ duration: 0.15 }}
+                   className="absolute right-0 top-full mt-2 w-52 z-50 bg-surface border border-outline-variant/40 rounded-xl shadow-2xl overflow-hidden"
                 >
                   <div className="px-4 py-3 border-b border-outline-variant/30 bg-surface-container/50">
-                    <p className="font-semibold text-on-surface text-sm">DevMaster_01</p>
-                    <p className="text-xs text-on-surface-variant">devmaster@company.com</p>
+                    <p className="font-semibold text-on-surface text-sm">{profile?.name || 'Developer'}</p>
+                    <p className="text-xs text-on-surface-variant">{profile?.email || 'local@keyforge.dev'}</p>
                   </div>
                   {[
                     { icon: 'settings', label: 'Settings', action: () => navigate('/settings') },

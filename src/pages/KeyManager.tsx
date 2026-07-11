@@ -16,7 +16,7 @@ const MASK = '••••••••••••••••';
 export default function KeyManager() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  
+
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,12 +28,19 @@ export default function KeyManager() {
   const [revealedKeys, setRevealedKeys] = useState<Set<string | number>>(new Set());
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [rotatingId, setRotatingId] = useState<string | number | null>(null);
-  
+
   const [newKeyDetails, setNewKeyDetails] = useState<ApiKey | null>(null);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [showSearch, setShowSearch] = useState(!!searchParams.get('search'));
-  
   const [newKey, setNewKey] = useState({ name: '', projectId: '', scope: 'Read/Write', expiry: '30 Days' });
+
+  /**
+   * WHY deleteConfirmId: Previously clicking the trash icon immediately called
+   * revokeKey() with no warning. A mis-click would permanently delete a production
+   * key. Now clicking the button sets deleteConfirmId, which shows a red confirm
+   * dialog inline. The user must explicitly click "Confirm Delete" to proceed.
+   */
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | number | null>(null);
 
   useEffect(() => {
     Promise.all([getProjects(), getKeys()])
@@ -48,15 +55,27 @@ export default function KeyManager() {
       .finally(() => setLoading(false));
   }, []);
 
+  // WHY: Clear revealed key state when search params change to avoid
+  // stale visibility state on keys the user has navigated away from.
   useEffect(() => {
     const q = searchParams.get('search') || '';
     setSearch(q);
     if (q) setShowSearch(true);
   }, [searchParams]);
 
+  // WHY: Clear revealed keys when the component unmounts.
+  // This prevents raw secrets from persisting in React state after navigation.
+  useEffect(() => {
+    return () => setRevealedKeys(new Set());
+  }, []);
+
   /* ── Actions ─────────────────────────────────────────── */
   const toggleReveal = (idVal: string | number) =>
-    setRevealedKeys(prev => { const n = new Set(prev); n.has(idVal) ? n.delete(idVal) : n.add(idVal); return n; });
+    setRevealedKeys(prev => {
+      const n = new Set(prev);
+      n.has(idVal) ? n.delete(idVal) : n.add(idVal);
+      return n;
+    });
 
   const handleCopy = (idVal: string | number, keyVal: string) => {
     navigator.clipboard.writeText(keyVal).catch(() => {});
@@ -64,11 +83,20 @@ export default function KeyManager() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDelete = (idVal: string | number) => {
+  /** Step 1: Set confirm state → shows inline confirm dialog */
+  const handleDeleteRequest = (idVal: string | number) => {
+    setDeleteConfirmId(idVal);
+  };
+
+  /** Step 2: User confirms → actually revokes the key */
+  const handleDeleteConfirm = (idVal: string | number) => {
     revokeKey(idVal)
       .then(() => setKeys(prev => prev.filter(k => k.id !== idVal)))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDeleteConfirmId(null));
   };
+
+  const handleDeleteCancel = () => setDeleteConfirmId(null);
 
   const handleDisable = (idVal: string | number) => {
     const targetKey = keys.find(k => k.id === idVal);
@@ -111,15 +139,23 @@ export default function KeyManager() {
 
   const handleCloseModal = () => {
     setShowModal(false);
+    // WHY: Clear the newKeyDetails immediately on close. The raw secret was
+    // in React state from the moment the key was created. Clearing it on modal
+    // close minimizes the window during which the secret exists in component state.
     setNewKeyDetails(null);
   };
 
   const handleExport = () => {
-    const rows = ['Name,Key,Project,Scope,Expiry,Status', ...keys.map(k => {
+    const rows = ['Name,Key Prefix,Project,Scope,Expiry,Status', ...keys.map(k => {
       const pName = projects.find(p => p.id === k.project_id)?.name || 'General';
-      return `${k.name},${k.key},${pName},${k.scope},${k.expiry},${k.status}`;
+      // Export masked key prefix only — never export full secrets
+      const maskedKey = k.key.slice(0, 12) + '••••••••••••';
+      return `${k.name},${maskedKey},${pName},${k.scope},${k.expiry},${k.status}`;
     })].join('\n');
-    const a = document.createElement('a'); a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(rows)}`; a.download = 'api-keys.csv'; a.click();
+    const a = document.createElement('a');
+    a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(rows)}`;
+    a.download = 'api-keys.csv';
+    a.click();
   };
 
   /* ── Filtering ────────────────────────────────────────── */
@@ -163,14 +199,14 @@ export default function KeyManager() {
         </div>
       </div>
 
-      {/* Security Guarantee Banner */}
+      {/* Security Banner */}
       <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20 flex gap-3 items-center">
         <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
         <div className="text-xs">
-          <p className="font-semibold text-primary">Unbreachable Architecture & Key Protection Enabled</p>
+          <p className="font-semibold text-primary">Hash-on-Write Key Protection Enabled</p>
           <p className="text-on-surface-variant mt-0.5">
-            KeyForge employs <strong>Hash-on-Write</strong>. Raw private keys are cryptographically hashed using SHA-256 before database storage. 
-            Once generated, the secret values are never displayed again or exposed to anyone—including administrators. Firewalls restrict query contexts dynamically.
+            Raw secrets are hashed with SHA-256 before database storage. Keys are shown exactly once at creation.
+            All mutations require authentication and are tenant-scoped to your organization.
           </p>
         </div>
       </div>
@@ -180,23 +216,18 @@ export default function KeyManager() {
         {/* Filter bar */}
         <div className="p-5 border-b border-outline-variant/30 flex flex-wrap gap-3 items-center justify-between bg-surface-container-high/20 z-10 relative">
           <div className="flex flex-wrap gap-3 items-center flex-1">
-            {/* Custom Project Select */}
             <Select
               value={filterProject}
               onChange={setFilterProject}
-              options={['All Projects', ...projects.map(p => ({ value: p.id, label: p.name }))] }
+              options={['All Projects', ...projects.map(p => ({ value: p.id, label: p.name }))]}
               className="min-w-[170px]"
             />
-
-            {/* Custom Scope Select */}
             <Select
               value={filterScope}
               onChange={setFilterScope}
               options={['Any Scope', 'Read', 'Read/Write', 'Admin', 'Write']}
               className="min-w-[140px]"
             />
-
-            {/* Status toggle */}
             <div className="flex items-center gap-1 bg-surface-variant/40 rounded-lg p-1 border border-outline-variant/30">
               {(['Active', 'All'] as const).map(f => (
                 <motion.button
@@ -211,7 +242,6 @@ export default function KeyManager() {
             </div>
           </div>
 
-          {/* Search toggle */}
           <div className="flex items-center gap-2">
             <AnimatePresence>
               {showSearch && (
@@ -305,9 +335,7 @@ export default function KeyManager() {
                       </span>
                     </td>
 
-                    <td className="p-4 text-sm text-on-surface-variant">
-                      {k.expiry}
-                    </td>
+                    <td className="p-4 text-sm text-on-surface-variant">{k.expiry}</td>
 
                     <td className="p-4">
                       {k.status === 'Active' ? (
@@ -329,47 +357,66 @@ export default function KeyManager() {
                     </td>
 
                     <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Rotate */}
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => handleRotate(k.id)}
-                          disabled={rotatingId === k.id || k.status !== 'Active'}
-                          className="p-1.5 text-on-surface-variant hover:text-secondary hover:bg-surface-variant rounded-md transition-colors disabled:opacity-40 cursor-pointer"
-                          title="Rotate key"
-                        >
-                          <span
-                            className={`material-symbols-outlined ${rotatingId === k.id ? 'animate-spin' : ''}`}
-                            style={{ fontSize: 18 }}
+                      {/* ── Delete Confirmation Inline Dialog ─────────── */}
+                      {deleteConfirmId === k.id ? (
+                        // WHY: A two-step confirmation prevents accidental permanent deletion
+                        // of production keys. The confirm + cancel appear inline to keep
+                        // context visible without a full modal.
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-xs text-error font-mono mr-1">Confirm delete?</span>
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleDeleteConfirm(k.id)}
+                            className="px-2 py-1 text-xs bg-error text-white rounded-md font-semibold cursor-pointer hover:opacity-90"
                           >
-                            sync
-                          </span>
-                        </motion.button>
-                        {/* Enable / Disable */}
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => handleDisable(k.id)}
-                          disabled={k.status === 'Revoked'}
-                          className="p-1.5 text-on-surface-variant hover:text-tertiary hover:bg-surface-variant rounded-md transition-colors disabled:opacity-40 cursor-pointer"
-                          title={k.status === 'Active' ? 'Disable key' : 'Enable key'}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                            {k.status === 'Active' ? 'block' : 'check_circle'}
-                          </span>
-                        </motion.button>
-                        {/* Delete */}
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => handleDelete(k.id)}
-                          className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-md transition-colors cursor-pointer"
-                          title="Delete key"
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
-                        </motion.button>
-                      </div>
+                            Delete
+                          </motion.button>
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleDeleteCancel}
+                            className="px-2 py-1 text-xs btn-secondary rounded-md cursor-pointer"
+                          >
+                            Cancel
+                          </motion.button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Rotate */}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleRotate(k.id)}
+                            disabled={rotatingId === k.id || k.status !== 'Active'}
+                            className="p-1.5 text-on-surface-variant hover:text-secondary hover:bg-surface-variant rounded-md transition-colors disabled:opacity-40 cursor-pointer"
+                            title="Rotate key"
+                          >
+                            <span className={`material-symbols-outlined ${rotatingId === k.id ? 'animate-spin' : ''}`} style={{ fontSize: 18 }}>sync</span>
+                          </motion.button>
+                          {/* Enable / Disable */}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleDisable(k.id)}
+                            disabled={k.status === 'Revoked'}
+                            className="p-1.5 text-on-surface-variant hover:text-tertiary hover:bg-surface-variant rounded-md transition-colors disabled:opacity-40 cursor-pointer"
+                            title={k.status === 'Active' ? 'Disable key' : 'Enable key'}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                              {k.status === 'Active' ? 'block' : 'check_circle'}
+                            </span>
+                          </motion.button>
+                          {/* Delete — triggers confirm dialog, not immediate deletion */}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleDeleteRequest(k.id)}
+                            className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-md transition-colors cursor-pointer"
+                            title="Delete key"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
+                          </motion.button>
+                        </div>
+                      )}
                     </td>
                   </motion.tr>
                 ))}
@@ -385,8 +432,10 @@ export default function KeyManager() {
               ) : displayed.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-12 text-center text-on-surface-variant">
-                    <span className="material-symbols-outlined block mb-2" style={{ fontSize: 40 }}>search_off</span>
-                    No keys match your filters.
+                    <span className="material-symbols-outlined block mb-2" style={{ fontSize: 40 }}>vpn_key_off</span>
+                    {keys.length === 0
+                      ? 'No keys yet. Create your first API key to get started.'
+                      : 'No keys match your filters.'}
                   </td>
                 </tr>
               ) : null}
@@ -409,7 +458,7 @@ export default function KeyManager() {
         </div>
       </div>
 
-      {/* ── Create Key Modal ────────────────────────────────── */}
+      {/* ── Create / Rotate Key Modal ──────────────────────────────────────── */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -446,10 +495,10 @@ export default function KeyManager() {
               {newKeyDetails ? (
                 <div className="flex-grow overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col justify-between">
                   <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-2xl animate-pulse">lock_open</span>
+                    <div className="p-4 rounded-xl bg-error/10 border border-error/30 flex items-center gap-3">
+                      <span className="material-symbols-outlined text-error text-2xl">warning</span>
                       <p className="text-xs text-on-surface">
-                        <strong>Copy this secret key.</strong> For security, we cannot show this token again after you close this panel.
+                        <strong>Copy this key now.</strong> For security, we cannot display this token again after you close this panel. Store it in a secrets manager immediately.
                       </p>
                     </div>
 
@@ -490,7 +539,6 @@ export default function KeyManager() {
               ) : (
                 <>
                   <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-
                     {/* Key Name */}
                     <div>
                       <label className="block font-mono text-xs text-on-surface-variant mb-2 uppercase tracking-wider">Key Name *</label>
@@ -501,6 +549,7 @@ export default function KeyManager() {
                         onChange={e => setNewKey(p => ({ ...p, name: e.target.value }))}
                         className="glass-input w-full px-3 py-2.5 text-sm"
                         autoFocus
+                        maxLength={100}
                       />
                       <p className="text-xs text-on-surface-variant mt-1.5">A descriptive name to identify this key.</p>
                     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Select from '../components/Select';
 import { getAudits, type AuditLog } from '../api';
@@ -19,6 +19,8 @@ const severityBadges: Record<AuditLog['severity'], string> = {
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.22 } } };
 
+const PAGE_SIZE = 50;
+
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,38 +29,66 @@ export default function AuditLogs() {
   const [severityFilter, setSeverityFilter] = useState('All Severities');
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    getAudits()
-      .then(setLogs)
+  /**
+   * WHY pagination: Previously the API returned ALL audit log rows and
+   * AuditLogs.tsx rendered them all. With tens of thousands of entries, this
+   * causes browser tab timeouts. Now we fetch 50 rows at a time and provide
+   * Previous / Next controls, matching how real compliance dashboards work.
+   */
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
+  const loadPage = useCallback((pageNum: number) => {
+    setLoading(true);
+    getAudits(pageNum)
+      .then(res => {
+        setLogs(res.logs);
+        setTotal(res.total);
+        setHasMore(res.hasMore);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    loadPage(0);
+  }, [loadPage]);
+
+  const handlePrev = () => {
+    const prev = Math.max(0, page - 1);
+    setPage(prev);
+    loadPage(prev);
+  };
+
+  const handleNext = () => {
+    const next = page + 1;
+    setPage(next);
+    loadPage(next);
+  };
+
   const handleExport = () => {
     setExporting(true);
     const headers = 'ID,Action,Category,Actor Name,Actor Email,Target,IP Address,Location,Timestamp,Severity';
-    const rows = logs.map(l => `${l.id},"${l.action}","${l.category}","${l.actorName}","${l.actorEmail}","${l.target}","${l.ip}","${l.location}","${l.timestamp}","${l.severity}"`);
+    const rows = logs.map(l =>
+      `${l.id},"${l.action}","${l.category}","${l.actorName}","${l.actorEmail}","${l.target}","${l.ip}","${l.location}","${l.timestamp}","${l.severity}"`
+    );
     const csvContent = [headers, ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `keyforge-audit-logs.csv`);
+    link.setAttribute('download', 'keyforge-audit-logs.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url); // release memory
     setTimeout(() => setExporting(false), 1200);
   };
 
   const filteredLogs = logs
-    .filter(log => {
-      if (categoryFilter === 'All Categories') return true;
-      return log.category === categoryFilter;
-    })
-    .filter(log => {
-      if (severityFilter === 'All Severities') return true;
-      return log.severity === severityFilter;
-    })
+    .filter(log => categoryFilter === 'All Categories' || log.category === categoryFilter)
+    .filter(log => severityFilter === 'All Severities' || log.severity === severityFilter)
     .filter(log => {
       if (!search.trim()) return true;
       const term = search.toLowerCase();
@@ -70,6 +100,9 @@ export default function AuditLogs() {
         log.ip.toLowerCase().includes(term)
       );
     });
+
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min((page + 1) * PAGE_SIZE, total);
 
   return (
     <div className="max-w-[1440px] mx-auto flex flex-col gap-6">
@@ -93,13 +126,15 @@ export default function AuditLogs() {
         </motion.button>
       </div>
 
-      {/* Security Statement Banner */}
+      {/* Security Banner */}
       <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex gap-3 items-center">
         <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>gavel</span>
         <div className="text-xs">
           <p className="font-semibold text-primary">Immutable Governance Rules Enabled</p>
           <p className="text-on-surface-variant mt-0.5">
-            Audit logs are written directly to a write-once-read-many (WORM) PostgreSQL schema. Row-level update and delete queries are completely blocked at the database engine level via security triggers.
+            Audit logs are written directly to a write-once-read-many (WORM) PostgreSQL schema.
+            Row-level UPDATE and DELETE queries are completely blocked at the database engine level via security triggers.
+            Results are paginated to {PAGE_SIZE} rows per page for performance.
           </p>
         </div>
       </div>
@@ -183,7 +218,7 @@ export default function AuditLogs() {
                       </code>
                     </td>
 
-                    {/* Actor */}
+                    {/* Actor — now real identity, not hardcoded DevMaster_01 */}
                     <td className="p-4">
                       <div>
                         <p className="font-medium text-on-surface text-sm">{log.actorName}</p>
@@ -198,14 +233,14 @@ export default function AuditLogs() {
                     </td>
 
                     {/* Timestamp */}
-                    <td className="p-4 font-mono text-xs text-on-surface-variant">
-                      {log.timestamp}
-                    </td>
+                    <td className="p-4 font-mono text-xs text-on-surface-variant">{log.timestamp}</td>
 
                     {/* Status badge */}
                     <td className="p-4 text-right">
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border ${severityBadges[log.severity]}`}>
-                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: log.severity === 'Success' ? '#4edea3' : log.severity === 'Warning' ? '#ffb3af' : '#ffb4ab' }} />
+                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{
+                          backgroundColor: log.severity === 'Success' ? '#4edea3' : log.severity === 'Warning' ? '#ffb3af' : '#ffb4ab'
+                        }} />
                         {log.severity}
                       </span>
                     </td>
@@ -232,14 +267,36 @@ export default function AuditLogs() {
           </table>
         </div>
 
-        {/* Footer info */}
+        {/* ── Pagination Footer ──────────────────────────────────────────── */}
         <div className="p-4 border-t border-outline-variant/30 flex justify-between items-center bg-surface-container-low/30">
           <span className="text-on-surface-variant text-sm">
-            Showing {filteredLogs.length} of {logs.length} logged actions
+            {total > 0 ? `Showing ${from}–${to} of ${total.toLocaleString()} actions` : 'No records'}
           </span>
-          <span className="font-mono text-[10px] text-on-surface-variant bg-surface-container px-2 py-1 rounded">
-            DB Status: CONNECTED
-          </span>
+
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] text-on-surface-variant bg-surface-container px-2 py-1 rounded">
+              Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+            </span>
+
+            <div className="flex gap-1">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handlePrev}
+                disabled={page === 0 || loading}
+                className="px-3 py-1.5 text-xs btn-secondary rounded-lg disabled:opacity-40 cursor-pointer"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_left</span>
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleNext}
+                disabled={!hasMore || loading}
+                className="px-3 py-1.5 text-xs btn-secondary rounded-lg disabled:opacity-40 cursor-pointer"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
+              </motion.button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
